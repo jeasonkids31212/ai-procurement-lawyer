@@ -2,6 +2,14 @@
 /mingit/
 /mingit.zip
 
+# Ignore GitHub CLI portable client
+/gh/
+
+# Ignore local batch helper script
+/login_github.bat
+
+
+
 # Python caches
 __pycache__/
 *.pyc
