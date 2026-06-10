@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>政府採購法函釋檢索系統</title>
+    <meta name="description" content="政府採購法解釋令、函釋、法規與公文全文檢索系統。提供全欄位條件交叉查詢，支援背景資料分塊加載與離線檢索。">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- CSS Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Glassmorphic Header -->
+    <header class="main-header">
+        <div class="container header-container">
+            <div class="logo-area">
+                <span class="logo-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </span>
+                <div class="logo-text">
+                    <h1>政府採購法 AI 法律智慧檢索系統</h1>
+                    <p>整合行政院工程會函釋、司法院裁判案例與 AI 大律師諮詢</p>
+                </div>
+            </div>
+            
+            <div class="header-actions">
+                <!-- Data Loading Progress Widget -->
+                <div id="loading-widget" class="loading-widget loading">
+                    <span class="pulse-indicator"></span>
+                    <span id="loading-status-text">資料載入中...</span>
+                    <div class="progress-bar-container">
+                        <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Theme Toggle Button -->
+                <button id="theme-toggle" class="icon-btn" aria-label="切換深淺色主題" title="切換深淺色主題">
+                    <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                    <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                </button>
+
+                <!-- API Key Config Button -->
+                <button id="api-key-config" class="icon-btn" aria-label="設定 AI 金鑰" title="設定 AI 金鑰">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container main-content">
+        <!-- Search Panel Section -->
+        <section class="search-panel glass-panel">
+            <div class="panel-tabs">
+                <button type="button" id="tab-pcc" class="tab-btn active">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    1. 採購法規工程會檢索
+                </button>
+                <button type="button" id="tab-judgments" class="tab-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    2. 司法院判決及法學資料
+                </button>
+                <button type="button" id="tab-ai-lawyer" class="tab-btn btn-ai-sparkle">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                    3. AI 律師及解答
+                </button>
+            </div>
+            
+            <!-- Tab 1: PCC Search Container -->
+            <div id="pcc-search-container" class="search-container">
+                <!-- Database Source Toggle inside Tab 1 -->
+                <div class="db-toggle-container" style="margin-bottom: 1rem;">
+                    <span class="db-toggle-label">資料庫源：</span>
+                    <div class="db-toggle-capsule">
+                        <button type="button" id="db-btn-rulings" class="db-toggle-btn active">
+                            採購法函釋資料
+                        </button>
+                        <button type="button" id="db-btn-errors" class="db-toggle-btn">
+                            政府採購錯誤態樣
+                        </button>
+                    </div>
+                </div>
+
+                <form id="pcc-search-form" class="search-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="search-doc-num">發文字號</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-doc-num" placeholder="例如：工程企字第1150004327號 或 1150004327">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="search-article">依據採購法條文</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-article" placeholder="例如：第22條、第63條">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="search-date">發文日期 (民國年月日)</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-date" placeholder="例如：1150528 或 115">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group md-col-2">
+                            <label for="search-title">主題 (主旨)</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-title" placeholder="請輸入主題關鍵字，支援空格多關鍵字搜尋">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group md-col-3">
+                            <label for="search-content">全文內容</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-content" placeholder="請輸入函釋內文關鍵字（此搜尋為全文檢索）">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" id="btn-pcc-reset" class="btn btn-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                            重設條件
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            開始查詢
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tab 2: Judgments Search Container (hidden by default) -->
+            <div id="judgments-search-container" class="search-container d-none">
+                <form id="judgments-search-form" class="search-form">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="search-case-num">裁判案號 (案號)</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-case-num" placeholder="例如：112年度建字第10號 或 112">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="search-court">裁判法院</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-court" placeholder="例如：最高行政法院、臺灣高等法院">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="search-judgment-article">依據採購法條文</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-judgment-article" placeholder="例如：第31條、第101條">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group md-col-2">
+                            <label for="search-judgment-title">主題 (主文關鍵字)</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-judgment-title" placeholder="請輸入主文關鍵字，如：駁回、廢棄">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group md-col-3">
+                            <label for="search-judgment-content">判決理由關鍵字 (全文)</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="search-judgment-content" placeholder="請輸入判決精簡理由關鍵字，例如：押標金、連帶負責">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" id="btn-judgments-reset" class="btn btn-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                            重設條件
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            開始查詢
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tab 3: AI Lawyer Search Container (hidden by default) -->
+            <div id="ai-lawyer-search-container" class="search-container d-none">
+                <div class="ai-input-group">
+                    <label for="ai-question">AI 採購大律師（請輸入您的口語化採購糾紛或法規爭議問題）</label>
+                    <div class="textarea-wrapper">
+                        <textarea id="ai-question" rows="4" placeholder="例如：我們公司在投標時因為投標文件漏蓋章，被機關判定不合格標，並且被沒收押標金。請問機關沒收押標金是否合理？有沒有救濟機會？應該注意或避免什麼？"></textarea>
+                    </div>
+                    <div class="ai-info-text">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                        AI 大律師會自動檢索「工程會函釋庫」與「司法院裁判書庫」，為您提取相關法令案例，並自動生成包含**「專業建議、應注意事項、應避免事項（避坑紅線）」**的精美意見書。（建議點擊右上角齒輪設定 Gemini API 金鑰以解鎖更強大的深度法規邏輯推理）
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" id="btn-ai-submit" class="btn btn-primary btn-ai-sparkle">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+                        啟動 AI 大律師諮詢解答
+                    </button>
+                </div>
+            </div>
+            </div>
+        </section>
+
+        <!-- Search Results Section -->
+        <section class="results-section">
+            <!-- AI Answer Summary Card Container -->
+            <div id="ai-guide-container"></div>
+
+            <div class="results-header">
+                <div class="results-stats">
+                    <span id="results-count" class="badge">共 3650 筆資料</span>
+                    <span id="filter-status" class="filter-status-text">顯示全部</span>
+                </div>
+                
+                <div class="results-per-page">
+                    <label for="per-page-select">每頁顯示</label>
+                    <select id="per-page-select" class="custom-select">
+                        <option value="10">10 筆</option>
+                        <option value="20" selected>20 筆</option>
+                        <option value="50">50 筆</option>
+                        <option value="100">100 筆</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Main Results List (Cards/Accordion) -->
+            <div id="results-container" class="results-container">
+                <!-- Loaded dynamically by app.js -->
+                <div class="skeleton-loader">
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                </div>
+            </div>
+
+            <!-- Pagination Control -->
+            <div id="pagination-container" class="pagination-container">
+                <!-- Loaded dynamically by app.js -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+        <div class="container footer-content">
+            <p>政府採購法函釋檢索系統 &copy; 2026. 建置於 GitHub Pages 靜態架構下。</p>
+            <p class="secondary-text">資料來源：行政院公共工程委員會主管法規解釋令。資料發布日期：民國 115 年 6 月 3 日。</p>
+        </div>
+    </footer>
+
+    <!-- API Key Config Modal -->
+    <div id="api-modal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h3>設定 Gemini API 金鑰</h3>
+                <button id="modal-close" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>本功能使用 Google Gemini 進行語意分析與關鍵字提取，金鑰將直接發送至 Google 伺服器，安全且免費。</p>
+                <div class="form-group" style="margin-top: 1rem; margin-bottom: 0.5rem;">
+                    <label for="api-key-input">Gemini API 金鑰 (API Key)</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="api-key-input" placeholder="請貼上您的 AIzaSy... 金鑰">
+                    </div>
+                </div>
+                <p class="help-text" style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+                    金鑰僅儲存於您個人的瀏覽器中，絕不傳送到第三方。
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="color: var(--primary-hover); text-decoration: underline;">點此前往 Google AI Studio 免費申請金鑰</a>
+                </p>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+                <button id="btn-save-key" class="btn btn-primary">儲存設定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS Logic -->
+    <script src="app.js"></script>
+</body>
+</html>

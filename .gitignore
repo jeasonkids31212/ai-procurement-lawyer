@@ -1,0 +1,11 @@
+# Ignore Git portable client
+/mingit/
+/mingit.zip
+
+# Python caches
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db

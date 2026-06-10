@@ -1,0 +1,11 @@
+{
+  "total_records": 3,
+  "total_chunks": 1,
+  "chunks": [
+    {
+      "id": 1,
+      "filename": "data/judgment_chunk_1.json",
+      "records_count": 3
+    }
+  ]
+}

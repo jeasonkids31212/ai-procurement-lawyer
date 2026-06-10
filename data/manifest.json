@@ -1,0 +1,106 @@
+{
+  "total_records": 3650,
+  "total_chunks": 20,
+  "chunks": [
+    {
+      "id": 1,
+      "filename": "data/chunk_1.json",
+      "records_count": 183
+    },
+    {
+      "id": 2,
+      "filename": "data/chunk_2.json",
+      "records_count": 183
+    },
+    {
+      "id": 3,
+      "filename": "data/chunk_3.json",
+      "records_count": 183
+    },
+    {
+      "id": 4,
+      "filename": "data/chunk_4.json",
+      "records_count": 183
+    },
+    {
+      "id": 5,
+      "filename": "data/chunk_5.json",
+      "records_count": 183
+    },
+    {
+      "id": 6,
+      "filename": "data/chunk_6.json",
+      "records_count": 183
+    },
+    {
+      "id": 7,
+      "filename": "data/chunk_7.json",
+      "records_count": 183
+    },
+    {
+      "id": 8,
+      "filename": "data/chunk_8.json",
+      "records_count": 183
+    },
+    {
+      "id": 9,
+      "filename": "data/chunk_9.json",
+      "records_count": 183
+    },
+    {
+      "id": 10,
+      "filename": "data/chunk_10.json",
+      "records_count": 183
+    },
+    {
+      "id": 11,
+      "filename": "data/chunk_11.json",
+      "records_count": 183
+    },
+    {
+      "id": 12,
+      "filename": "data/chunk_12.json",
+      "records_count": 183
+    },
+    {
+      "id": 13,
+      "filename": "data/chunk_13.json",
+      "records_count": 183
+    },
+    {
+      "id": 14,
+      "filename": "data/chunk_14.json",
+      "records_count": 183
+    },
+    {
+      "id": 15,
+      "filename": "data/chunk_15.json",
+      "records_count": 183
+    },
+    {
+      "id": 16,
+      "filename": "data/chunk_16.json",
+      "records_count": 183
+    },
+    {
+      "id": 17,
+      "filename": "data/chunk_17.json",
+      "records_count": 183
+    },
+    {
+      "id": 18,
+      "filename": "data/chunk_18.json",
+      "records_count": 183
+    },
+    {
+      "id": 19,
+      "filename": "data/chunk_19.json",
+      "records_count": 183
+    },
+    {
+      "id": 20,
+      "filename": "data/chunk_20.json",
+      "records_count": 173
+    }
+  ]
+}
