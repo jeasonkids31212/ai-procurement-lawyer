@@ -210,6 +210,8 @@ async function loadChunksSequentially(chunks) {
             await new Promise(resolve => setTimeout(resolve, 30));
         } catch (err) {
             console.error(`載入區塊 ${chunk.id} 失敗:`, err);
+            totalChunks--;
+            updateLoadingProgress();
         }
     }
 }
@@ -247,6 +249,8 @@ async function loadErrorChunksSequentially(chunks) {
             await new Promise(resolve => setTimeout(resolve, 30));
         } catch (err) {
             console.error(`載入錯誤區塊 ${chunk.id} 失敗:`, err);
+            errorTotalChunks--;
+            updateLoadingProgress();
         }
     }
 }
@@ -285,6 +289,8 @@ async function loadJudgmentChunksSequentially(chunks) {
             await new Promise(resolve => setTimeout(resolve, 30));
         } catch (err) {
             console.error(`載入裁判書區塊 ${chunk.id} 失敗:`, err);
+            judgmentTotalChunks--;
+            updateLoadingProgress();
         }
     }
 }
