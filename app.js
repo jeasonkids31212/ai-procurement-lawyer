@@ -831,6 +831,7 @@ function localSemanticParse(question) {
         pcc_views: '',
         court_ruling_views: '',
         professional_advice: '',
+        legal_judgment: '',
         dos: [],
         donts: [],
         isLocal: true
@@ -845,6 +846,7 @@ function localSemanticParse(question) {
     let pccText = '根據工程會相關令釋，機關辦理個案採購應依合約公平合理條款履行，凡涉處分應依法定程序辦理並陳述意見。';
     let courtText = '行政法院與民事法院實務審理指出，採購爭議應區分招標決標（行政處分）與履約驗收（私法契約）階段，並適用對應法律時效。';
     let adviceText = '建議您儘速盤點招標文件或公文往來，釐清責任歸屬與爭端要點，於法定救濟期限（15天或20天內）提出書面主張，避免權益受損。';
+    let judgmentText = '【AI 判定：依個案事證與時效評估勝訴機會】\n本案涉及採購法法規爭議。首要關鍵在於確認機關處分送達日，並於法定救濟期間（如 101 條停權通知之 20 日內、追繳押標金通知之 15 日內）依法提出書面異議，以確保後續行政或民事救濟勝算。';
     
     const dos = [
         '詳實核對原招標公告與契約範本之條款約定。',
@@ -867,12 +869,14 @@ function localSemanticParse(question) {
                 pccText = '工程會指出，採購法第 22 條第 1 項各款為限制性招標之法定適用事由，機關應從嚴審查其規格或獨家供應之必要性，不得任意變更招標方式。';
                 courtText = '司法裁判指出，若機關違反採購法第 22 條規定進行限制性招標，可能構成程序瑕疵而影響決標契約之效力，未得標廠商得依法提出救濟。';
                 adviceText = '如您是利害關係廠商，建議儘速對機關之限制性招標公告提出書面異議。如屬後續擴充案件，請確認招標文件是否預先載明擴充上限。';
+                judgmentText = '【AI 判定：視招標規格而定，機關有裁量權，但須嚴格審查】\n本案限制性招標是否合法，關鍵在於符合採購法第 22 條第 1 項各款要件。若無「獨家製造」、「無其他替代方案」之客觀事由，機關逕行限制性招標恐屬程序違法，其他廠商得依法異議，且法院實務傾向嚴格核實審查。';
                 dos.push('確認招標公告是否敘明後續擴充之期間、金額或數量。');
                 donts.push('避免在無防禦性之限制性招標決標後才提出爭議，應在招標等標期內提出異議。');
             } else if (num === 101) {
                 pccText = '工程會規定，機關依第 101 條通知將廠商刊登拒絕往來政府公報前，應給予廠商書面陳述意見之機會，且須符合比例原則。';
                 courtText = '最高行政法院見解強調，101 條刊登公報屬公法處分，需嚴格審查廠商是否符合可歸責之惡意要件（非可歸責或輕微違約不得停權）。';
                 adviceText = '收到 101 條通知函時，必須在「20 日內」提出書面異議。若機關維持原決定，應在「15 日內」向申訴會提出申訴，並聲請假處分暫緩刊登。';
+                judgmentText = '【AI 判定：極可能不合理，勝訴率高】\n若廠商僅屬投標文件填寫錯誤或單純漏蓋章等輕微疏漏，並無重大違約或惡意圍標、故意虛偽不實之意圖，機關擬依採購法第 101 條刊登公報停權處分，顯然違反行政法比例原則。最高行政法院實務對停權處分之「可歸責性」採嚴格審查，建議儘速於 20 日內提出書面異議。';
                 dos.push('收到通知函後，務必於 20 天之不變期間內提出書面異議。');
                 dos.push('向行政法院聲請停止執行（假處分），避免在判決確定前被先行刊登公報停權。');
                 donts.push('切勿忽視機關的 101 條通知公文，逾期未提出異議將導致直接刊登公報停權 1 至 3 年。');
@@ -880,12 +884,14 @@ function localSemanticParse(question) {
                 pccText = '工程會 108 年修法後，關於第 31 條第 2 項追繳押標金之處分，應從寬審查廠商是否有串通投標或影響採購公正之惡意意圖。';
                 courtText = '最高行政法院判決見解：追繳押標金屬於公法處分，時效適用行政程序法第 131 條之 5 年公法請求權時效，逾期機關不得追繳。';
                 adviceText = '請核對機關通知追繳押標金之日期，是否已超過行為發生日起算之 5 年時效。若有程序爭議，應於 15 日內提出異議申訴救濟。';
+                judgmentText = '【AI 判定：單純文件疏失追繳不合理，借牌圍標則屬合理】\n機關追繳押標金需以廠商有採購法第 31 條第 2 項之惡意串通、偽造變造文件或影響公正投標等行為為限。若僅屬單純文件填錯或漏誤，追繳不合法。此外，需確認是否已逾 5 年之公法時效，逾期追繳亦屬違法。';
                 dos.push('確認機關追繳時，是否已超過行為發生日起算之 5 年公法時效。');
                 donts.push('避免任意配合其他廠商借牌投標，這將構成採購法 31 條沒收押標金並伴隨刑事責任。');
             } else if (num === 63) {
                 pccText = '工程會依第 63 條訂定各式採購契約範本，機關辦理採購應以採用範本為原則，不可任意加重廠商之不合理責任。';
                 courtText = '民事法院審理採購契約爭議時，常參酌工程會契約範本之物價指數調整、違約金比例等，作為衡量契約公平合理與情事變更之判斷標準。';
                 adviceText = '建議詳細檢視當個案合約是否有違背工程會範本之顯失公平條款，並依法主張合約合理變更或扣減違約金。';
+                judgmentText = '【AI 判定：逾期違約金過高可請求酌減，合約失衡可爭取調整】\n本案涉及履約階段契約條款適用。依民法第 252 條及法院裁判見解，若契約違約金比例過高，或因非可歸責於廠商之原因導致延誤，廠商可於調解或民事訴訟中要求酌減違約金，亦可參考工程會契約範本主張權益。';
                 dos.push('參酌工程會工程契約範本第5條之三層級物價指數調整機制申請調整。');
                 donts.push('避免任意拋棄依物價指數調整契約金額之請求權利。');
             }
@@ -895,15 +901,26 @@ function localSemanticParse(question) {
             coreText = '本案核心涉及押標金沒收或追繳之爭議（採購法第 31 條）。';
             pccText = '工程會指出，押標金為擔保投標公正性，若廠商無影響公正之不法行為（如單純文件漏蓋章等），不得隨意沒收。';
             courtText = '行政法院實務見解認為，廠商雖有不合格標情形，但若非涉借牌或圍標，機關追繳押標金常因缺乏可歸責性被法院撤銷。';
+            judgmentText = '【AI 判定：無惡意意圖之追繳沒收不合理】\n廠商若無圍標借牌或虛偽不實之惡意，僅因文件填錯等不合格標事由，機關追繳或沒收押標金均不合理。建議配合相關裁判實務，於 15 日內提出異議。';
             dos.push('釐清是否屬於借牌投標、圍標或提供偽造文件等涉嫌違反採購法第 31 條之情形。');
             donts.push('避免在未收到正式書面處分書前，盲目自行扣繳押標金。');
         } else if (question.includes('驗收') || question.includes('契約變更') || question.includes('違約金')) {
             coreText = '本案涉及合約履約階段之驗收、減價收受或逾期違約金爭議。';
+            pccText = '工程會範本規定，驗收結果與規定不符者，若不影響使用安全，機關得經核准後辦理減價收受，且違約金應符合比例原則.、'; // Wait, let's use the exact text
             pccText = '工程會範本規定，驗收結果與規定不符者，若不影響使用安全，機關得經核准後辦理減價收受，且違約金應符合比例原則。';
             courtText = '民事法院在審理逾期違約金時，若認定機關定額違約金過高，得依民法第 252 條規定酌減違約金。';
+            judgmentText = '【AI 判定：非可歸責延誤應予扣除，違約金過高應酌減】\n驗收瑕疵若非重大，應主張依採購法第 72 條辦理減價收受；若有逾期違約金爭議，凡非可歸責廠商之工期（天災、機關遲延）皆應扣除，過高之違約金得聲請減免或酌減。';
             dos.push('若屬可減價收受之瑕疵，請機關依採購法第 72 條第 2 項辦理減價收受，避免整案不合格。');
             dos.push('聲請將非可歸責於廠商之工期延誤天數（如天災、機關延遲交付工地）予以扣除。');
             donts.push('不要隨便簽署無條件拋棄逾期天數爭議之驗收記錄結算書。');
+        } else if (question.includes('填錯') || question.includes('漏蓋章') || question.includes('合理嗎') || question.includes('合理')) {
+            coreText = '本案核心涉及機關對廠商投標文件瑕疵所為處分之合理性爭議。';
+            pccText = '工程會實務見解指出，投標文件若僅屬投標單填寫錯誤、印章漏蓋等程式或文字瑕疵，在不影響採購公平公正之情況下，機關直接予以停權或追繳押標金等嚴厲處分，不符行政程序法之比例原則。';
+            courtText = '行政法院裁判指出，投標文件填錯或漏蓋章屬不合格標事由，但非屬採購法第101條第1項或第31條第2項之惡意違背法規情事。機關若逕予停權處分，常因不具備「可歸責之惡意」而被法院撤銷。';
+            judgmentText = '【AI 判定：極可能不合理，勝訴率高】\n若機關因為您投標文件填寫錯誤（或漏蓋章）就判定您違反採購法第101條並予以停權，這在法律上是高度不合理的！最高行政法院指出，單純的文書疏漏不具備「可歸責之惡意」，機關逕行刊登公報停權處分違反比例原則。建議您於收到通知20日內務必提出書面異議。';
+            dos.push('收到機關通知之20日內提出書面異議，並於機關駁回後15日內向採購申訴審議委員會提出申訴。');
+            dos.push('向行政法院聲請停止執行，避免停權處分在訴訟確定前先行執行。');
+            donts.push('切勿放任救濟期限過期。逾期未提異議將導致直接刊登公報停權。');
         }
     }
 
@@ -911,6 +928,7 @@ function localSemanticParse(question) {
     result.pcc_views = pccText;
     result.court_ruling_views = courtText;
     result.professional_advice = adviceText;
+    result.legal_judgment = judgmentText;
     result.dos = dos.slice(0, 4);
     result.donts = donts.slice(0, 4);
 
@@ -943,6 +961,7 @@ ${judgmentsCtx || '未檢索到直接相關判決。'}
 
 請依據上述資料及中華民國政府採購法，客觀且專業地分析使用者問題，並嚴格以下列的 JSON 格式回傳（不要包含任何 Markdown 格式框或 \`\`\`json 標記，僅回傳純 JSON 內容）：
 {
+  "legal_judgment": "針對使用者的採購糾紛或法規爭議，給予一個明確且直指核心的 AI 法律判定結論，包含合理性判定與勝率評估（約 100-150 字，例如：『【AI 判定：極可能不合理，勝訴率高】本案機關以廠商投標文件單純填寫錯誤為由擬刊登採購法第101條停權，因廠商並非故意虛偽不實，且無重大可歸責事由，本件停權處分顯然違反比例原則，若提出行政救濟勝訴率極高。建議儘速依程序異議申訴。』）",
   "core_analysis": "核心法律問題分析與適用法條（約 150 字，明確提及涉及的採購法條文）",
   "pcc_views": "工程會實務函釋之見解摘要（約 150 字，說明主管機關的態度）",
   "court_ruling_views": "司法法院判決案例之見解與訴訟勝敗關鍵分析（約 150 字）",
@@ -1102,6 +1121,21 @@ function renderAiLawyerReport(question, result, retrieved) {
                 ${modeBadge}
             </div>
             
+            <div class="verdict-banner" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12)); border: 1.5px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 20px -2px rgba(139, 92, 246, 0.2); display: flex; gap: 1rem; align-items: flex-start;">
+                <div style="background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="3"/><path d="M12 14c-1.5 0-3-.5-3-1.5V11h6v1.5c0 1-1.5 1.5-3 1.5z"/></svg>
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem;">
+                        AI 王牌大律師合理性判定與勝率評估
+                        <span class="pulse-indicator" style="background-color: var(--accent-success, #10b981); width: 8px; height: 8px; border-radius: 50%; animation: pulse 1.6s infinite;"></span>
+                    </div>
+                    <div style="font-size: 0.95rem; line-height: 1.6; color: var(--text-primary); font-weight: 500; white-space: pre-line;">
+                        ${escapeHtml(result.legal_judgment || '本案法律判定載入中...')}
+                    </div>
+                </div>
+            </div>
+            
             <div class="report-grid">
                 <div class="report-card">
                     <div class="report-card-title">
@@ -1150,7 +1184,7 @@ function renderAiLawyerReport(question, result, retrieved) {
                 <div class="donts-panel">
                     <div class="panel-title">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        應避免事項 / 違法紅線 (Don\'ts)
+                        應避免事項 / 違法紅線 (Don'ts)
                     </div>
                     <ul class="list-container">
                         ${dontsHtml || '<li class="list-item">無特別避免事項</li>'}
