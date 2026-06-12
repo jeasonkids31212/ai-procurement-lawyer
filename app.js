@@ -940,12 +940,13 @@ async function callGeminiAPI(question, retrievedRulings, retrievedJudgments) {
     const model = 'gemini-2.0-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
 
-    const rulingsCtx = retrievedRulings.map((r, i) => 
-        `【工程會函釋 ${i+1}】\n發文字號：${r.發文字號 || '無'}\n主題：${r.主題}\n內容：${r.內容}\n連結：${r.連結網址}`
+    // 限制只取前 2 筆最相關資料，且內容截斷至 600 字，避免觸發免費版 40,000 TPM (每分鐘Token) 的上限限制
+    const rulingsCtx = retrievedRulings.slice(0, 2).map((r, i) => 
+        `【工程會函釋 ${i+1}】\n發文字號：${r.發文字號 || '無'}\n主題：${r.主題}\n內容：${(r.內容 || '').slice(0, 600)}...\n連結：${r.連結網址}`
     ).join('\n\n');
 
-    const judgmentsCtx = retrievedJudgments.map((j, i) => 
-        `【法院判決 ${i+1}】\n案號：${j.案號 || '無'}\n法院：${j.裁判法院}\n主文：${j.裁判主文}\n內容：${j.內容}\n連結：${j.連結網址}`
+    const judgmentsCtx = retrievedJudgments.slice(0, 2).map((j, i) => 
+        `【法院判決 ${i+1}】\n案號：${j.案號 || '無'}\n法院：${j.裁判法院}\n主文：${j.裁判主文}\n內容：${(j.內容 || '').slice(0, 600)}...\n連結：${j.連結網址}`
     ).join('\n\n');
 
     const prompt = `你是一位精通中華民國政府採購法的資深大律師。請針對使用者提出的口語問題，結合系統檢索到的工程會實務函釋及法院判決案例，提供一份專業的法律諮詢意見書。
