@@ -937,7 +937,7 @@ function localSemanticParse(question) {
 
 // === 呼叫 Google Gemini API 進行 RAG 語意分析 ===
 async function callGeminiAPI(question, retrievedRulings, retrievedJudgments) {
-    const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+    const models = ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
 
     // 限制只取前 2 筆最相關資料，且內容截斷至 600 字，避免觸發免費版 40,000 TPM (每分鐘Token) 的上限限制
     const rulingsCtx = retrievedRulings.slice(0, 2).map((r, i) => 
