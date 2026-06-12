@@ -1073,11 +1073,9 @@ async function handleAiLawyerConsult() {
     } catch (err) {
         console.error('AI 智慧分析失敗：', err);
         const errorMsg = err.message || '';
-        if (errorMsg.toLowerCase().includes('quota') || errorMsg.toLowerCase().includes('limit') || errorMsg.includes('429')) {
-            alert(`AI 大律師研判失敗：您的 Gemini API 金鑰已達免費額度限制或呼叫頻率過高。\n\n【建議】請等待約 30 秒後重試，或者先將齒輪中的金鑰清空，體驗我們強大的「本地智慧解析意見書」。`);
-        } else {
-            alert(`AI 智慧分析失敗：${errorMsg}\n請確認金鑰是否正確，或清空金鑰使用本地解析。`);
-        }
+        
+        // 彈出詳細診斷訊息，方便使用者排除問題
+        alert(`AI 大律師法律研判失敗！\n\n【詳細錯誤原因】\n${errorMsg}\n\n【故障排除建議】\n1. 若訊息顯示 "API key not valid..."：代表您的 API 金鑰輸入有誤或複製不完整。\n2. 若訊息顯示 "billing or location limits..." 或 "Quota exceeded..."：這代表該 Google 帳號的專案受限（例如：使用公司/學校的 Google Workspace 帳號被系統停用、或專案未啟用 Generative Language API）。\n3. 若訊息顯示 "User location is not supported..."：代表您目前的網路 IP 地區（例如使用了特定 VPN）不支援 Gemini 服務。\n\n💡 溫馨提示：您可以點擊右上角「齒輪 ⚙️」將金鑰清空並儲存，即可直接體驗強大且無限制的「本地專家規則解析意見書」！`);
     } finally {
         btnAiSubmit.disabled = false;
         btnAiSubmit.innerHTML = originalText;
