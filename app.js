@@ -937,8 +937,7 @@ function localSemanticParse(question) {
 
 // === 呼叫 Google Gemini API 進行 RAG 語意分析 ===
 async function callGeminiAPI(question, retrievedRulings, retrievedJudgments) {
-    const model = 'gemini-1.5-flash';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`;
+    const models = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
 
     // 限制只取前 2 筆最相關資料，且內容截斷至 600 字，避免觸發免費版 40,000 TPM (每分鐘Token) 的上限限制
     const rulingsCtx = retrievedRulings.slice(0, 2).map((r, i) => 
@@ -997,28 +996,47 @@ JSON 輸出：`;
         }
     };
 
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-    });
+    let lastError = null;
 
-    if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error?.message || `HTTP 錯誤 ${response.status}`);
+    // 依序嘗試呼叫不同模型（實現與工程督導系統相同的降級容錯機制）
+    for (const modelName of models) {
+        try {
+            console.log(`[Gemini API] 正在嘗試呼叫模型: ${modelName}...`);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                const msg = errData.error?.message || `HTTP 錯誤 ${response.status}`;
+                throw new Error(`${modelName} 失敗: ${msg}`);
+            }
+
+            const resData = await response.json();
+            const resultText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!resultText) {
+                throw new Error(`${modelName} 失敗: AI 未回傳有效內容`);
+            }
+
+            const parsed = JSON.parse(resultText.trim());
+            parsed.isLocal = false;
+            console.log(`[Gemini API] 模型 ${modelName} 呼叫成功！`);
+            return parsed;
+
+        } catch (err) {
+            console.warn(`[Gemini API] 模型 ${modelName} 異常，準備嘗試備用模型。原因:`, err.message);
+            lastError = err;
+        }
     }
 
-    const resData = await response.json();
-    const resultText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!resultText) {
-        throw new Error('AI 未回傳有效內容');
-    }
-
-    const parsed = JSON.parse(resultText.trim());
-    parsed.isLocal = false;
-    return parsed;
+    // 所有模型都失敗時，拋出最後一個錯誤
+    throw lastError || new Error('所有備用 Gemini 模型皆呼叫失敗');
 }
 
 // === 處理 AI 大律師諮詢提交 ===
