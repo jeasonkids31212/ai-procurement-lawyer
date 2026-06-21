@@ -29,6 +29,11 @@ let judgmentManifest = null; // 存放裁判書 manifest 資訊
 
 let geminiApiKey = localStorage.getItem('gemini_api_key') || '';
 
+// AI 互動對答區全域狀態
+let aiChatHistory = [];       // 儲存對話歷程 (符合 Gemini API contents 規範)
+let lastRetrievedDocs = null;  // 快取前次檢索結果
+let lastAiPromptText = '';    // 快取前次產生的 RAG prompt 文字
+
 // 搜尋條件快取
 const searchCriteria = {
     docNum: '',
@@ -981,6 +986,8 @@ ${judgmentsCtx || '未檢索到直接相關判決。'}
 使用者口語問題：「${question}」
 JSON 輸出：`;
 
+    lastAiPromptText = prompt; // 快取 Prompt 文字供後續對話使用
+
     const requestBody = {
         contents: [
             {
@@ -1039,6 +1046,57 @@ JSON 輸出：`;
     throw lastError || new Error('所有備用 Gemini 模型皆呼叫失敗');
 }
 
+// === 呼叫 Google Gemini API 進行多輪對答 (Chat) ===
+async function callGeminiChatAPI(history) {
+    const models = ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+    
+    if (!geminiApiKey) {
+        throw new Error('未設定 Gemini API 金鑰，請先在設定中配置。');
+    }
+
+    const requestBody = {
+        contents: history
+    };
+
+    let lastError = null;
+
+    for (const modelName of models) {
+        try {
+            console.log(`[Gemini Chat API] 正在嘗試呼叫模型: ${modelName}...`);
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                const msg = errData.error?.message || `HTTP 錯誤 ${response.status}`;
+                throw new Error(`${modelName} 失敗: ${msg}`);
+            }
+
+            const resData = await response.json();
+            const resultText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!resultText) {
+                throw new Error(`${modelName} 失敗: AI 未回傳有效內容`);
+            }
+
+            console.log(`[Gemini Chat API] 模型 ${modelName} 呼叫成功！`);
+            return resultText;
+
+        } catch (err) {
+            console.warn(`[Gemini Chat API] 模型 ${modelName} 異常，準備嘗試備用模型。原因:`, err.message);
+            lastError = err;
+        }
+    }
+
+    throw lastError || new Error('所有備用 Gemini 模型皆呼叫失敗');
+}
+
 // === 處理 AI 大律師諮詢提交 ===
 async function handleAiLawyerConsult() {
     const question = aiQuestionInput.value.trim();
@@ -1048,13 +1106,15 @@ async function handleAiLawyerConsult() {
         return;
     }
 
-    // 1. 本地 RAG 檢索相關資料
+    // 1. 本地 RAG 檢檢索相關資料
     const retrieved = localRAGRetrieve(question);
 
     // 2. 判斷是否有 API 金鑰，若無則走本地智慧引擎
     if (!geminiApiKey) {
         try {
             const result = localSemanticParse(question);
+            lastRetrievedDocs = retrieved;
+            aiChatHistory = []; // 本地模式清空對話歷史，不支援互動
             renderAiLawyerReport(question, result, retrieved);
         } catch (err) {
             console.error('本地分析失敗：', err);
@@ -1087,6 +1147,21 @@ async function handleAiLawyerConsult() {
 
     try {
         const result = await callGeminiAPI(question, retrieved.rulings, retrieved.judgments);
+        
+        // 成功取得後，更新快取並初始化對話歷史
+        lastRetrievedDocs = retrieved;
+        aiChatHistory = [];
+        // 將初始 RAG 提示詞做為第一輪 User 輸入
+        aiChatHistory.push({
+            role: 'user',
+            parts: [{ text: lastAiPromptText }]
+        });
+        // 將初始產出的 JSON 做為第一輪 Model 回答
+        aiChatHistory.push({
+            role: 'model',
+            parts: [{ text: JSON.stringify(result) }]
+        });
+
         renderAiLawyerReport(question, result, retrieved);
     } catch (err) {
         console.error('AI 智慧分析失敗：', err);
@@ -1125,6 +1200,17 @@ function renderAiLawyerReport(question, result, retrieved) {
         `;
     }
 
+    // 建立 AI 律師互動對答的初始語意氣泡
+    const initialAiMessage = `您好！我是您的 AI 採購法律助手。針對您提出的問題，我已檢索相關函釋與裁判案例，並完成了深度研判分析，您可於下方查閱完整詳細意見書。
+
+【核心判定與勝率評估】
+${result.legal_judgment || '本案法律判定載入中...'}
+
+【專業行動對策建議】
+${result.professional_advice || '本案建議載入中...'}
+
+如果您對目前的答覆有任何疑問，或需要針對案情細節（例如工程延遲的原因、文件瑕疵詳情）進行補充，可以在下方輸入框直接「繼續追問」，我將依據先前對話與案例庫背景繼續為您深度分析！`;
+
     aiGuideContainer.innerHTML = `
         <div class="ai-lawyer-report">
             <div class="report-header">
@@ -1136,6 +1222,31 @@ function renderAiLawyerReport(question, result, retrieved) {
                     </div>
                 </div>
                 ${modeBadge}
+            </div>
+
+            <!-- AI 互動對答區 (AI Chat) -->
+            <div class="ai-chat-section">
+                <div class="ai-chat-title">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; color: var(--primary-hover);"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span>⚖️ AI 律師互動對答區</span>
+                </div>
+                <div class="chat-history" id="chat-history-container">
+                    <div class="chat-bubble ai">${escapeHtml(initialAiMessage).replace(/\n/g, '<br>')}</div>
+                </div>
+                
+                ${geminiApiKey && !result.isLocal ? `
+                <div class="chat-input-area">
+                    <textarea class="chat-input" id="chat-followup-input" placeholder="對回答不滿意？請輸入您的案情細節或問題繼續追問大律師... (例如：可是我們是因為天災延遲，機關仍算在我們頭上...)"></textarea>
+                    <button type="button" class="btn btn-primary btn-chat-send" id="btn-chat-send">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        發送追問
+                    </button>
+                </div>
+                ` : `
+                <div style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; padding: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px dashed var(--border-color);">
+                    💡 溫馨提示：設定 Gemini API 金鑰且啟用 API 查詢時，即可在此直接「繼續追問」大律師！目前正使用本地專家規則解析。
+                </div>
+                `}
             </div>
             
             <div class="verdict-banner" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12)); border: 1.5px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 20px -2px rgba(139, 92, 246, 0.2); display: flex; gap: 1rem; align-items: flex-start;">
@@ -1212,6 +1323,135 @@ function renderAiLawyerReport(question, result, retrieved) {
             ${refHtml}
         </div>
     `;
+
+    // 綁定發送追問按鈕與 Enter 鍵事件
+    if (geminiApiKey && !result.isLocal) {
+        const sendBtn = document.getElementById('btn-chat-send');
+        const chatInput = document.getElementById('chat-followup-input');
+        if (sendBtn && chatInput) {
+            sendBtn.addEventListener('click', handleAiChatFollowUp);
+            chatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleAiChatFollowUp();
+                }
+            });
+        }
+    }
     
     aiGuideContainer.scrollIntoView({ behavior: 'smooth' });
+}
+
+// === 處理使用者追問互動邏輯 ===
+async function handleAiChatFollowUp() {
+    const chatInput = document.getElementById('chat-followup-input');
+    const sendBtn = document.getElementById('btn-chat-send');
+    const historyContainer = document.getElementById('chat-history-container');
+    
+    if (!chatInput || !sendBtn || !historyContainer) return;
+    
+    const followUpText = chatInput.value.trim();
+    if (!followUpText) return;
+    
+    // 1. 禁用輸入與按鈕防止重複送出
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    
+    // 2. 在對話歷史中插入使用者的泡泡
+    const userBubble = document.createElement('div');
+    userBubble.className = 'chat-bubble user';
+    userBubble.textContent = followUpText;
+    historyContainer.appendChild(userBubble);
+    
+    // 滾動到底部
+    historyContainer.scrollTop = historyContainer.scrollHeight;
+    
+    // 3. 插入 AI 的讀取中泡泡
+    const loadingBubble = document.createElement('div');
+    loadingBubble.className = 'chat-bubble ai loading-bubble';
+    loadingBubble.innerHTML = `
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+        <span class="loading-dot"></span>
+    `;
+    historyContainer.appendChild(loadingBubble);
+    historyContainer.scrollTop = historyContainer.scrollHeight;
+    
+    // 4. 將使用者訊息加入全域歷史紀錄
+    aiChatHistory.push({
+        role: 'user',
+        parts: [{ text: followUpText }]
+    });
+    
+    // 清空輸入框
+    chatInput.value = '';
+    
+    try {
+        // 5. 呼叫 Gemini Chat API
+        const reply = await callGeminiChatAPI(aiChatHistory);
+        
+        // 移除讀取中泡泡
+        if (historyContainer.contains(loadingBubble)) {
+            historyContainer.removeChild(loadingBubble);
+        }
+        
+        // 6. 插入 AI 的回覆泡泡
+        const aiBubble = document.createElement('div');
+        aiBubble.className = 'chat-bubble ai';
+        aiBubble.innerHTML = formatChatReply(reply);
+        historyContainer.appendChild(aiBubble);
+        
+        // 將 AI 回覆加入全域歷史紀錄
+        aiChatHistory.push({
+            role: 'model',
+            parts: [{ text: reply }]
+        });
+        
+    } catch (err) {
+        console.error('追問失敗：', err);
+        if (historyContainer.contains(loadingBubble)) {
+            historyContainer.removeChild(loadingBubble);
+        }
+        
+        const errorBubble = document.createElement('div');
+        errorBubble.className = 'chat-bubble ai';
+        errorBubble.style.borderColor = 'var(--accent-danger)';
+        errorBubble.innerHTML = `<span style="color: var(--accent-danger); font-weight: bold;">⚠️ 追問研判失敗：</span>${escapeHtml(err.message)}`;
+        historyContainer.appendChild(errorBubble);
+        
+        // 恢復輸入框原先的值
+        chatInput.value = followUpText;
+    } finally {
+        chatInput.disabled = false;
+        sendBtn.disabled = false;
+        chatInput.focus();
+        historyContainer.scrollTop = historyContainer.scrollHeight;
+    }
+}
+
+// === 格式化 AI 聊天回覆 (簡單 Markdown/HTML 轉換) ===
+function formatChatReply(text) {
+    if (!text) return '';
+    let html = escapeHtml(text);
+    
+    // 粗體轉換: **文字** -> <strong>文字</strong>
+    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // 列表與段落轉換
+    html = html.split('\n').map(line => {
+        line = line.trim();
+        if (line.startsWith('* ') || line.startsWith('- ')) {
+            return `<li>${line.slice(2)}</li>`;
+        }
+        if (line.match(/^\d+\.\s/)) {
+            return `<li>${line.replace(/^\d+\.\s/, '')}</li>`;
+        }
+        if (line === '') return '';
+        return `<p>${line}</p>`;
+    }).join('\n');
+    
+    // 合併鄰近的 <li>
+    html = html.replace(/(<li>.*?<\/li>\n?)+/g, match => `<ul>${match}</ul>`);
+    
+    return html;
 }
