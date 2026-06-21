@@ -1177,10 +1177,10 @@ async function handleAiLawyerConsult() {
             role: 'user',
             parts: [{ text: lastAiPromptText }]
         });
-        // 將初始產出的 JSON 做為第一輪 Model 回答
+        // 將口語化的初次答覆做為第一輪 Model 回答，避免傳入原始 JSON 導致後續回覆夾帶程式碼標記
         aiChatHistory.push({
             role: 'model',
-            parts: [{ text: JSON.stringify(result) }]
+            parts: [{ text: result.chat_reply || '我已為您完成深度法律研判，詳細分析已呈現在意見書中。' }]
         });
 
         renderAiLawyerReport(question, result, retrieved);
@@ -1447,7 +1447,16 @@ async function handleAiChatFollowUp() {
 // === 格式化 AI 聊天回覆 (簡單 Markdown/HTML 轉換) ===
 function formatChatReply(text) {
     if (!text) return '';
-    let html = escapeHtml(text);
+    
+    // 移除開頭或結尾可能的 Markdown 程式碼區塊標記 (如 ```json 或 ``` )
+    let cleaned = text.trim();
+    cleaned = cleaned.replace(/^```[a-zA-Z0-9-]*\n/i, '');
+    cleaned = cleaned.replace(/\n```$/i, '');
+    cleaned = cleaned.replace(/^```/i, '');
+    cleaned = cleaned.replace(/```$/i, '');
+    cleaned = cleaned.trim();
+    
+    let html = escapeHtml(cleaned);
     
     // 粗體轉換: **文字** -> <strong>文字</strong>
     html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
