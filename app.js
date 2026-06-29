@@ -1116,6 +1116,10 @@ function initAiWorkspace() {
     if (newChatBtn) {
         newChatBtn.addEventListener('click', resetAiChat);
     }
+    const headerResetBtn = document.getElementById('ai-header-reset-btn');
+    if (headerResetBtn) {
+        headerResetBtn.addEventListener('click', resetAiChat);
+    }
 
     // 傳送按鈕
     if (sendBtn) {
@@ -1686,27 +1690,22 @@ function showWelcomeBubble() {
     const welcome = document.createElement('div');
     welcome.className = 'chat-bubble welcome-bubble';
     welcome.innerHTML = `
-        <h3 style="margin-bottom: 0.4rem; color: var(--primary-hover); font-weight: 700; font-size: 1.05rem;">⚖️ AI採購法大律師</h3>
-        <p style="font-size: 0.88rem; line-height: 1.55; color: var(--text-secondary); margin: 0 0 0.8rem 0;">
-            您好！我是您的 AI 採購法律助手。我精通政府採購法、工程會主管行政函釋與裁判案例。
-            請在下方輸入您遇到的政府採購爭議或具體案情，我會為您進行深度合理性判定、勝率估算，並產出專業的分析意見書。
-        </p>
-        <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); text-align: left; margin-bottom: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
-            💡 快速引導諮詢範本（點擊下方膠囊立即開始分析）：
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+            <div style="background: linear-gradient(135deg, var(--accent-gold), hsl(35, 90%, 50%)); color: #0b0f19; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem;">律</div>
+            <span style="font-weight: 700; font-size: 0.95rem; color: var(--accent-gold);">AI 王牌大律師</span>
         </div>
-        <div class="quick-templates" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; width: 100%; margin-top: 0.25rem;">
-            <div class="template-capsule" data-query="投標文件漏蓋章被沒收押標金，機關追繳時效是多久？合理嗎？" style="padding: 0.5rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); text-align: left;" title="沒收押標金時效">
-                ⚖️ 沒收押標金時效
-            </div>
-            <div class="template-capsule" data-query="機關擬依採購法第101條刊登拒絕往來公報處分，該如何申訴救濟？時效是幾天？合理嗎？" style="padding: 0.5rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); text-align: left;" title="101條停權救濟">
-                🚫 101條停權救濟
-            </div>
-            <div class="template-capsule" data-query="機關辦理採購招標，任意採用限制性招照（採購法第22條），是否構成程序違法？" style="padding: 0.5rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); text-align: left;" title="限制性招標合法性">
-                🤝 限制性招標合法性
-            </div>
-            <div class="template-capsule" data-query="因工期延誤（非可歸責）被扣罰逾期違約金，可以主張減價收受或酌減違約金嗎？" style="padding: 0.5rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); text-align: left;" title="逾期違約金酌減">
-                ⏳ 逾期違約金酌減
-            </div>
+        <p style="font-size: 0.88rem; line-height: 1.6; color: var(--text-secondary); margin: 0 0 1rem 0;">
+            您好！我是您的 **AI 採購法王牌大律師**。不論您遇到了政府採購的招標、審標、決標爭議，或是沒收押標金、101條刊登公報停權處分、逾期違約金扣罰扣款等實務問題，我都可以為您提供專業的法律合理性研判、法條爭點分析與具體救濟行動建議。
+        </p>
+        <p style="font-size: 0.88rem; line-height: 1.6; color: var(--text-secondary); margin: 0 0 1rem 0;">
+            請在下方輸入您的案情或提問開始諮詢！我會結合本機庫中最新的採購法規與行政函釋進行答覆。在每輪答覆中，您可以點擊 **「展開本輪 AI 核心研判報告」** 查看詳細分析與行動紅綠線燈指引。
+        </p>
+        
+        <div class="quick-templates" style="display: flex; flex-wrap: wrap; gap: 0.5rem; width: 100%; margin-top: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+            <button class="template-capsule" data-query="投標文件漏蓋章被沒收押標金，機關追繳時效是多久？合理嗎？" style="background: hsla(215, 25%, 38%, 0.12); border: 1px solid var(--border-color); border-radius: 20px; padding: 0.45rem 0.9rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); font-family: inherit;" onmouseover="this.style.borderColor='var(--accent-gold)'; this.style.color='var(--text-primary)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)'">⚖️ 沒收押標金時效</button>
+            <button class="template-capsule" data-query="機關擬依採購法第101條刊登拒絕往來公報處分，該如何申訴救濟？時效是幾天？" style="background: hsla(215, 25%, 38%, 0.12); border: 1px solid var(--border-color); border-radius: 20px; padding: 0.45rem 0.9rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); font-family: inherit;" onmouseover="this.style.borderColor='var(--accent-gold)'; this.style.color='var(--text-primary)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)'">🚫 101條停權救濟</button>
+            <button class="template-capsule" data-query="機關辦理採購招標，任意採用限制性招標（採購法第22條），是否合理？" style="background: hsla(215, 25%, 38%, 0.12); border: 1px solid var(--border-color); border-radius: 20px; padding: 0.45rem 0.9rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); font-family: inherit;" onmouseover="this.style.borderColor='var(--accent-gold)'; this.style.color='var(--text-primary)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)'">🤝 限制性招標合法性</button>
+            <button class="template-capsule" data-query="因工期延誤（非可歸責）被扣罰逾期違約金，可以主張減價收受或酌減違約金嗎？" style="background: hsla(215, 25%, 38%, 0.12); border: 1px solid var(--border-color); border-radius: 20px; padding: 0.45rem 0.9rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); font-family: inherit;" onmouseover="this.style.borderColor='var(--accent-gold)'; this.style.color='var(--text-primary)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)'">⏳ 逾期違約金酌減</button>
         </div>
     `;
     messagesContainer.appendChild(welcome);
