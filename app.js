@@ -169,8 +169,8 @@ function setupEventListeners() {
         if (e.target === apiModal) closeApiModal();
     });
 
-    // AI 大律師諮詢提交
-    btnAiSubmit.addEventListener('click', handleAiLawyerConsult);
+    // AI 大律師工作區初始化
+    initAiWorkspace();
 
     // 資料庫切換鈕監聽
     if (dbBtnRulings && dbBtnErrors) {
@@ -776,69 +776,30 @@ function normalizeProcurementArticles(text) {
                     total += temp * 10;
                     temp = 0;
                 } else if (char === '廿') {
-                    total += 20;
-                    temp = 0;
-                } else if (char === '卅') {
-                    total += 30;
-                    temp = 0;
-                } else {
-                    temp = val;
-                }
-            }
-        }
-        total += temp;
-        return total;
-    }
-    
-    return text.replace(/(第)?\s*([零一二三四五六七八九十廿卅\d]+)\s*([條項款])/g, (match, prefix, numStr, unit) => {
-        const arabic = parseChineseNum(numStr);
-        return `第${arabic}${unit}`;
-    });
-}
+            // === 全域對話 Session 記憶與狀態變數 ===
+let aiSessions = JSON.parse(localStorage.getItem('mol_procure_sessions')) || [];
+let activeSessionId = null;
+let accumulatedReferences = [];
 
-// === RAG 檢索邏輯 ===
-function localRAGRetrieve(question) {
-    const normalizedQuestion = normalizeProcurementArticles(question).toLowerCase();
-    const stopWords = ['請問', '如何', '什麼', '規定', '需要', '怎麼', '適用', '情形', '問題', '法規', '是否'];
-    const keywords = normalizedQuestion.split(/[\s，。？、！\?]+/).filter(w => w.length >= 2 && !stopWords.includes(w));
-    
-    const scoreItem = (item, kws) => {
-        let score = 0;
-        const text = ((item.主題 || '') + ' ' + (item.內容 || '') + ' ' + (item.依據採購法條文 || '') + ' ' + (item.裁判主文 || '')).toLowerCase();
-        kws.forEach(kw => {
-            if (text.includes(kw)) {
-                score += kw.length;
-            }
-        });
-        return score;
-    };
-
-    const rulingsScores = allRulingsData.concat(allErrorsData).map(item => ({
-        item,
-        score: scoreItem(item, keywords)
-    })).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
-
-    const judgmentsScores = allJudgmentsData.map(item => ({
-        item,
-        score: scoreItem(item, keywords)
-    })).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
-
-    return {
-        rulings: rulingsScores.slice(0, 3).map(x => x.item),
-        judgments: judgmentsScores.slice(0, 3).map(x => x.item)
-    };
-}
-
-// === 本地智慧分析引擎 ===
+// === 本地專家語意解析規則引擎 ===
 function localSemanticParse(question) {
     const result = {
-        core_analysis: '',
-        pcc_views: '',
-        court_ruling_views: '',
-        professional_advice: '',
-        legal_judgment: '',
-        dos: [],
-        donts: [],
+        conversational_answer: '',
+        reasonability: '行為判定：依個案事證與時效評估勝訴機會',
+        win_rate: '50%',
+        verdict_reason: '本案涉及一般採購法規爭議，首要關鍵在於確認機關處分送達日，並於法定期間內提出救濟。',
+        law_analysis: '本案涉及政府採購法規適用與合約履行義務爭議。司法裁判指出，採購爭議應區分招標決標（行政處分）與履約驗收（私法契約）階段，並適用對應法律時效。',
+        action_suggestions: '建議您儘速盤點招標文件或公文往來，釐清責任歸屬與爭端要點，於法定救濟期限（15天或20天內）提出書面主張，避免權益受損。',
+        dos: [
+            '詳實核對原招標公告與契約範本之條款約定。',
+            '妥善保存與機關往來之所有正式書面公文、會議紀錄與電子憑據。',
+            '注意異議（15日內）及申訴（15日內）之救濟法定不變期間。'
+        ],
+        donts: [
+            '避免超過法定救濟時效，否則將喪失實體審查機會。',
+            '避免在未釐清契約責任前，草率簽署減價收受或拋棄權利之協定。',
+            '不要沿用舊版電子領標憑據投標，避免被判定為不合格標。'
+        ],
         isLocal: true
     };
 
@@ -847,11 +808,11 @@ function localSemanticParse(question) {
     const matchedArticles = normalizedQuestion.match(articleRegex);
     const detectedArticle = matchedArticles && matchedArticles.length > 0 ? matchedArticles[0] : '';
 
-    let coreText = '本案涉及政府採購法規適用與合約履行義務爭議。';
-    let pccText = '根據工程會相關令釋，機關辦理個案採購應依合約公平合理條款履行，凡涉處分應依法定程序辦理並陳述意見。';
-    let courtText = '行政法院與民事法院實務審理指出，採購爭議應區分招標決標（行政處分）與履約驗收（私法契約）階段，並適用對應法律時效。';
-    let adviceText = '建議您儘速盤點招標文件或公文往來，釐清責任歸屬與爭端要點，於法定救濟期限（15天或20天內）提出書面主張，避免權益受損。';
-    let judgmentText = '【AI 判定：依個案事證與時效評估勝訴機會】\n本案涉及採購法法規爭議。首要關鍵在於確認機關處分送達日，並於法定救濟期間（如 101 條停權通知之 20 日內、追繳押標金通知之 15 日內）依法提出書面異議，以確保後續行政或民事救濟勝算。';
+    let lawAnalysisText = '本案涉及政府採購法規適用與合約履行義務爭議。';
+    let actionSuggestionsText = '建議您儘速盤點招標文件或公文往來，釐清責任歸屬與爭端要點，於法定救濟期限（15天或20天內）提出書面主張，避免權益受損。';
+    let reasonabilityText = '行為判定：依個案事證與時效評估勝訴機會';
+    let winRateText = '50%';
+    let verdictReasonText = '本案涉及一般採購法規爭議，首要關鍵在於確認機關處分送達日，並於法定期間內提出救濟。';
     
     const dos = [
         '詳實核對原招標公告與契約範本之條款約定。',
@@ -866,167 +827,178 @@ function localSemanticParse(question) {
     ];
 
     if (detectedArticle) {
-        coreText = `本案核心法律爭點與政府採購法「${detectedArticle}」密切相關。`;
+        lawAnalysisText = `本案核心法律爭點與政府採購法「${detectedArticle}」密切相關。`;
+        const artNum = detectedArticle.match(/\d+/);
+        if (artNum) {
+// === 全域對話 Session 記憶與狀態變數 ===
+let aiSessions = JSON.parse(localStorage.getItem('mol_procure_sessions')) || [];
+let activeSessionId = null;
+let accumulatedReferences = [];
+
+// === 本地專家語意解析規則引擎 ===
+function localSemanticParse(question) {
+    const result = {
+        conversational_answer: '',
+        reasonability: '行為判定：依個案事證與時效評估勝訴機會',
+        win_rate: '50%',
+        verdict_reason: '本案涉及一般採購法規爭議，首要關鍵在於確認機關處分送達日，並於法定期間內提出救濟。',
+        law_analysis: '本案涉及政府採購法規適用與合約履行義務爭議。司法裁判指出，採購爭議應區分招標決標（行政處分）與履約驗收（私法契約）階段，並適用對應法律時效。',
+        action_suggestions: '建議您儘速盤點招標文件或公文往來，釐清責任歸屬與爭端要點，於法定救濟期限（15天或20天內）提出書面主張，避免權益受損。',
+        dos: [
+            '詳實核對原招標公告與契約範本之條款約定。',
+            '妥善保存與機關往來之所有正式書面公文、會議紀錄與電子憑據。',
+            '注意異議（15日內）及申訴（15日內）之救濟法定不變期間。'
+        ],
+        donts: [
+            '避免超過法定救濟時效，否則將喪失實體審查機會。',
+            '避免在未釐清契約責任前，草率簽署減價收受或拋棄權利之協定。',
+            '不要沿用舊版電子領標憑據投標，避免被判定為不合格標。'
+        ],
+        isLocal: true
+    };
+
+    const normalizedQuestion = normalizeProcurementArticles(question);
+    const articleRegex = /(第\d+條(?:第\d+項)?(?:第\d+款)?|第\d+條第\d+款)/g;
+    const matchedArticles = normalizedQuestion.match(articleRegex);
+    const detectedArticle = matchedArticles && matchedArticles.length > 0 ? matchedArticles[0] : '';
+
+    let lawAnalysisText = '本案涉及政府採購法規適用與合約履行義務爭議。';
+    let actionSuggestionsText = '建議您儘速盤點招標文件或公文往來，釐清責任歸屬與爭端要點，於法定救濟期限（15天或20天內）提出書面主張，避免權益受損。';
+    let reasonabilityText = '行為判定：依個案事證與時效評估勝訴機會';
+    let winRateText = '50%';
+    let verdictReasonText = '本案涉及一般採購法規爭議，首要關鍵在於確認機關處分送達日，並於法定期間內提出救濟。';
+    
+    const dos = [
+        '詳實核對原招標公告與契約範本之條款約定。',
+        '妥善保存與機關往來之所有正式書面公文、會議紀錄與電子憑據。',
+        '注意異議（15日內）及申訴（15日內）之救濟法定不變期間。'
+    ];
+    
+    const donts = [
+        '避免超過法定救濟時效，否則將喪失實體審查機會。',
+        '避免在未釐清契約責任前，草率簽署減價收受或拋棄權利之協定。',
+        '不要沿用舊版電子領標憑據投標，避免被判定為不合格標。'
+    ];
+
+    if (detectedArticle) {
+        lawAnalysisText = `本案核心法律爭點與政府採購法「${detectedArticle}」密切相關。`;
         const artNum = detectedArticle.match(/\d+/);
         if (artNum) {
             const num = parseInt(artNum[0], 10);
             if (num === 22) {
-                pccText = '工程會指出，採購法第 22 條第 1 項各款為限制性招標之法定適用事由，機關應從嚴審查其規格或獨家供應之必要性，不得任意變更招標方式。';
-                courtText = '司法裁判指出，若機關違反採購法第 22 條規定進行限制性招標，可能構成程序瑕疵而影響決標契約之效力，未得標廠商得依法提出救濟。';
-                adviceText = '如您是利害關係廠商，建議儘速對機關之限制性招標公告提出書面異議。如屬後續擴充案件，請確認招標文件是否預先載明擴充上限。';
-                judgmentText = '【AI 判定：視招標規格而定，機關有裁量權，但須嚴格審查】\n本案限制性招標是否合法，關鍵在於符合採購法第 22 條第 1 項各款要件。若無「獨家製造」、「無其他替代方案」之客觀事由，機關逕行限制性招標恐屬程序違法，其他廠商得依法異議，且法院實務傾向嚴格核實審查。';
+                lawAnalysisText += '\n\n工程會指出，採購法第 22 條第 1 項各款為限制性招標之法定適用事由，機關應從嚴審查其規格或獨家供應之必要性，不得任意變更招標方式。\n\n司法裁判指出，若機關違反採購法第 22 條規定進行限制性招標，可能構成程序瑕疵而影響決標契約之效力，未得標廠商得依法提出救濟。';
+                actionSuggestionsText = '如您是利害關係廠商，建議儘速對機關之限制性招標公告提出書面異議。如屬後續擴充案件，請確認招標文件是否預先載明擴充上限。';
+                reasonabilityText = '行為判定：限制性招標需有法定事由，否則即屬違法（政府採購法第22條）';
+                winRateText = '60%';
+                verdictReasonText = '限制性招標合法與否取決於是否符合第22條第1項各款要件。若無獨家供應或緊急情況等事實，機關違法裁量高，廠商申訴勝算大。';
                 dos.push('確認招標公告是否敘明後續擴充之期間、金額或數量。');
                 donts.push('避免在無防禦性之限制性招標決標後才提出爭議，應在招標等標期內提出異議。');
             } else if (num === 101) {
-                pccText = '工程會規定，機關依第 101 條通知將廠商刊登拒絕往來政府公報前，應給予廠商書面陳述意見之機會，且須符合比例原則。';
-                courtText = '最高行政法院見解強調，101 條刊登公報屬公法處分，需嚴格審查廠商是否符合可歸責之惡意要件（非可歸責或輕微違約不得停權）。';
-                adviceText = '收到 101 條通知函時，必須在「20 日內」提出書面異議。若機關維持原決定，應在「15 日內」向申訴會提出申訴，並聲請假處分暫緩刊登。';
-                judgmentText = '【AI 判定：極可能不合理，勝訴率高】\n若廠商僅屬投標文件填寫錯誤或單純漏蓋章等輕微疏漏，並無重大違約或惡意圍標、故意虛偽不實之意圖，機關擬依採購法第 101 條刊登公報停權處分，顯然違反行政法比例原則。最高行政法院實務對停權處分之「可歸責性」採嚴格審查，建議儘速於 20 日內提出書面異議。';
+                lawAnalysisText += '\n\n工程會規定，機關依第 101 條通知將廠商刊登拒絕往來政府公報前，應給予廠商書面陳述意見之機會，且須符合比例原則。\n\n最高行政法院見解強調，101 條刊登公報屬公法處分，需嚴格審查廠商是否符合可歸責之惡意要件（非可歸責或輕微違約不得停權）。';
+                actionSuggestionsText = '收到 101 條通知函時，必須在「20 日內」提出書面異議。若機關維持原決定，應在「15 日內」向申訴會提出申訴，並聲請假處分暫緩刊登。';
+                reasonabilityText = '行為判定：擬刊登公報停權處分可能違反比例原則（政府採購法第101條）';
+                winRateText = '85%';
+                verdictReasonText = '單純文書漏誤或無可歸責之惡意違約不符停權要件，機關若強行停權顯屬違法，且時效易逾越，救濟成功機率極高。';
                 dos.push('收到通知函後，務必於 20 天之不變期間內提出書面異議。');
                 dos.push('向行政法院聲請停止執行（假處分），避免在判決確定前被先行刊登公報停權。');
                 donts.push('切勿忽視機關的 101 條通知公文，逾期未提出異議將導致直接刊登公報停權 1 至 3 年。');
             } else if (num === 31) {
-                pccText = '工程會 108 年修法後，關於第 31 條第 2 項追繳押標金之處分，應從寬審查廠商是否有串通投標或影響採購公正之惡意意圖。';
-                courtText = '最高行政法院判決見解：追繳押標金屬於公法處分，時效適用行政程序法第 131 條之 5 年公法請求權時效，逾期機關不得追繳。';
-                adviceText = '請核對機關通知追繳押標金之日期，是否已超過行為發生日起算之 5 年時效。若有程序爭議，應於 15 日內提出異議申訴救濟。';
-                judgmentText = '【AI 判定：單純文件疏失追繳不合理，借牌圍標則屬合理】\n機關追繳押標金需以廠商有採購法第 31 條第 2 項之惡意串通、偽造變造文件或影響公正投標等行為為限。若僅屬單純文件填錯或漏誤，追繳不合法。此外，需確認是否已逾 5 年之公法時效，逾期追繳亦屬違法。';
+                lawAnalysisText += '\n\n工程會 108 年修法後，關於第 31 條第 2 項追繳押標金之處分，應從寬審查廠商是否有串通投標或影響採購公正之惡意意圖。\n\n最高行政法院判決見解：追繳押標金屬於公法處分，時效適用行政程序法第 131 條之 5 年公法請求權時效，逾期機關不得追繳。';
+                actionSuggestionsText = '請核對機關通知追繳押標金之日期，是否已超過行為發生日起算之 5 年時效。若有程序爭議，應於 15 日內提出異議申訴救濟。';
+                reasonabilityText = '行為判定：沒收或追繳押標金需視是否有惡意不法意圖（政府採購法第31條）';
+                winRateText = '75%';
+                verdictReasonText = '若僅為投標單寫錯等文件疏失，機關追繳屬於違法處分。此外須確認追繳是否已逾越 5 年公法時效。';
                 dos.push('確認機關追繳時，是否已超過行為發生日起算之 5 年公法時效。');
                 donts.push('避免任意配合其他廠商借牌投標，這將構成採購法 31 條沒收押標金並伴隨刑事責任。');
             } else if (num === 63) {
-                pccText = '工程會依第 63 條訂定各式採購契約範本，機關辦理採購應以採用範本為原則，不可任意加重廠商之不合理責任。';
-                courtText = '民事法院審理採購契約爭議時，常參酌工程會契約範本之物價指數調整、違約金比例等，作為衡量契約公平合理與情事變更之判斷標準。';
-                adviceText = '建議詳細檢視當個案合約是否有違背工程會範本之顯失公平條款，並依法主張合約合理變更或扣減違約金。';
-                judgmentText = '【AI 判定：逾期違約金過高可請求酌減，合約失衡可爭取調整】\n本案涉及履約階段契約條款適用。依民法第 252 條及法院裁判見解，若契約違約金比例過高，或因非可歸責於廠商之原因導致延誤，廠商可於調解或民事訴訟中要求酌減違約金，亦可參考工程會契約範本主張權益。';
+                lawAnalysisText += '\n\n工程會依第 63 條訂定各式採購契約範本，機關辦理採購應以採用範本為原則，不可任意加重廠商之不合理責任。\n\n民事法院審理採購契約爭議時，常參酌工程會契約範本之物價指數調整、違約金比例等，作為衡量契約公平合理與情事變更之判斷標準。';
+                actionSuggestionsText = '建議詳細檢視當個案合約是否有違背工程會範本之顯失公平條款，並依法主張合約合理變更或酌減違約金。';
+                reasonabilityText = '行為判定：契約條款涉顯失公平或違約金過高（政府採購法第63條）';
+                winRateText = '70%';
+                verdictReasonText = '法院與調解實務多傾向參照工程會契約範本，如違約金過高可請求酌減，合約失衡得依法請求調整。';
                 dos.push('參酌工程會工程契約範本第5條之三層級物價指數調整機制申請調整。');
                 donts.push('避免任意拋棄依物價指數調整契約金額之請求權利。');
             }
         }
     } else {
         if (question.includes('押標金') || question.includes('保證金')) {
-            coreText = '本案核心涉及押標金沒收或追繳之爭議（採購法第 31 條）。';
-            pccText = '工程會指出，押標金為擔保投標公正性，若廠商無影響公正之不法行為（如單純文件漏蓋章等），不得隨意沒收。';
-            courtText = '行政法院實務見解認為，廠商雖有不合格標情形，但若非涉借牌或圍標，機關追繳押標金常因缺乏可歸責性被法院撤銷。';
-            judgmentText = '【AI 判定：無惡意意圖之追繳沒收不合理】\n廠商若無圍標借牌或虛偽不實之惡意，僅因文件填錯等不合格標事由，機關追繳或沒收押標金均不合理。建議配合相關裁判實務，於 15 日內提出異議。';
+            lawAnalysisText = '本案涉及押標金沒收或追繳之爭議（採購法第 31 條）。工程會指出，押標金為擔保投標公正性，若廠商無影響公正之不法行為（如單純文件漏蓋章等），不得隨意沒收。行政法院實務見解認為，廠商雖有不合格標情形，但若非涉借牌或圍標，機關追繳押標金常因缺乏可歸責性被法院撤銷。';
+            actionSuggestionsText = '釐清是否屬於借牌投標、圍標或提供偽造文件等涉嫌違反採購法第 31 條之情形。若有程序爭議，應於 15 日內提出異議。';
+            reasonabilityText = '行為判定：無惡意意圖之追繳沒收押標金不合理（政府採購法第31條）';
+            winRateText = '80%';
+            verdictReasonText = '廠商無圍標借牌或虛偽不實之惡意，僅因文件填錯等不合格標事由，機關追繳或沒收押標金均不合理，救濟成算高。';
             dos.push('釐清是否屬於借牌投標、圍標或提供偽造文件等涉嫌違反採購法第 31 條之情形。');
             donts.push('避免在未收到正式書面處分書前，盲目自行扣繳押標金。');
         } else if (question.includes('驗收') || question.includes('契約變更') || question.includes('違約金')) {
-            coreText = '本案涉及合約履約階段之驗收、減價收受或逾期違約金爭議。';
-            pccText = '工程會範本規定，驗收結果與規定不符者，若不影響使用安全，機關得經核准後辦理減價收受，且違約金應符合比例原則.、'; // Wait, let's use the exact text
-            pccText = '工程會範本規定，驗收結果與規定不符者，若不影響使用安全，機關得經核准後辦理減價收受，且違約金應符合比例原則。';
-            courtText = '民事法院在審理逾期違約金時，若認定機關定額違約金過高，得依民法第 252 條規定酌減違約金。';
-            judgmentText = '【AI 判定：非可歸責延誤應予扣除，違約金過高應酌減】\n驗收瑕疵若非重大，應主張依採購法第 72 條辦理減價收受；若有逾期違約金爭議，凡非可歸責廠商之工期（天災、機關遲延）皆應扣除，過高之違約金得聲請減免或酌減。';
+            lawAnalysisText = '本案涉及合約履約階段之驗收、減價收受或逾期違約金爭議。工程會範本規定，驗收結果與規定不符者，若不影響使用安全，機關得經核准後辦理減價收受，且違約金應符合比例原則。民事法院在審理逾期違約金時，若認定機關定額違約金過高，得依民法第 252 條規定酌減違約金。';
+            actionSuggestionsText = '若屬可減價收受之瑕疵，請機關依採購法第 72 條第 2 項辦理減價收受，避免整案不合格。並聲請扣除天災等不可歸責工期。';
+            reasonabilityText = '行為判定：非可歸責延誤應予扣除，逾期違約金過高應酌減（政府採購法第72條、第63條）';
+            winRateText = '75%';
+            verdictReasonText = '瑕疵非重大者可主張減價收受，不可歸責廠商之工期（天災、機關遲延）皆應扣除，過高之違約金得於調解或起訴中聲請裁酌酌減。';
             dos.push('若屬可減價收受之瑕疵，請機關依採購法第 72 條第 2 項辦理減價收受，避免整案不合格。');
             dos.push('聲請將非可歸責於廠商之工期延誤天數（如天災、機關延遲交付工地）予以扣除。');
             donts.push('不要隨便簽署無條件拋棄逾期天數爭議之驗收記錄結算書。');
         } else if (question.includes('填錯') || question.includes('漏蓋章') || question.includes('合理嗎') || question.includes('合理')) {
-            coreText = '本案核心涉及機關對廠商投標文件瑕疵所為處分之合理性爭議。';
-            pccText = '工程會實務見解指出，投標文件若僅屬投標單填寫錯誤、印章漏蓋等程式或文字瑕疵，在不影響採購公平公正之情況下，機關直接予以停權或追繳押標金等嚴厲處分，不符行政程序法之比例原則。';
-            courtText = '行政法院裁判指出，投標文件填錯或漏蓋章屬不合格標事由，但非屬採購法第101條第1項或第31條第2項之惡意違背法規情事。機關若逕予停權處分，常因不具備「可歸責之惡意」而被法院撤銷。';
-            judgmentText = '【AI 判定：極可能不合理，勝訴率高】\n若機關因為您投標文件填寫錯誤（或漏蓋章）就判定您違反採購法第101條並予以停權，這在法律上是高度不合理的！最高行政法院指出，單純的文書疏漏不具備「可歸責之惡意」，機關逕行刊登公報停權處分違反比例原則。建議您於收到通知20日內務必提出書面異議。';
+            lawAnalysisText = '本案核心涉及機關對廠商投標文件瑕疵所為處分之合理性爭議。工程會實務見解指出，投標文件若僅屬投標單填寫錯誤、印章漏蓋等程式或文字瑕疵，在不影響採購公平公正之情況下，機關直接予以停權或追繳押標金等嚴厲處分，不符行政程序法之比例原則。行政法院裁判指出，投標文件填錯或漏蓋章屬不合格標事由，但非屬採購法第101條第1項或第31條第2項之惡意違背法規情事。機關若逕予停權處分，常因不具備「可歸責之惡意」而被法院撤銷。';
+            actionSuggestionsText = '收到機關通知之20日內提出書面異議，並於機關駁回後15日內向採購申訴審議委員會提出申訴。同時向行政法院聲請停止執行。';
+            reasonabilityText = '行為判定：文書筆誤或漏蓋章逕予停權追繳顯屬不合理（政府採購法第101條、第31條）';
+            winRateText = '90%';
+            verdictReasonText = '單純投標文件筆誤不具備違法惡意與可歸責性，停權或追繳處分顯然違背行政法比例原則，異議申訴勝算極高。';
             dos.push('收到機關通知之20日內提出書面異議，並於機關駁回後15日內向採購申訴審議委員會提出申訴。');
             dos.push('向行政法院聲請停止執行，避免停權處分在訴訟確定前先行執行。');
             donts.push('切勿放任救濟期限過期。逾期未提異議將導致直接刊登公報停權。');
         }
     }
 
-    result.core_analysis = coreText;
-    result.pcc_views = pccText;
-    result.court_ruling_views = courtText;
-    result.professional_advice = adviceText;
-    result.legal_judgment = judgmentText;
-    result.dos = dos.slice(0, 4);
-    result.donts = donts.slice(0, 4);
-
-    // 依據問題動態產生非制式的 chat_reply
-    let chatReplyText = '針對您的採購法規問題，這在實務上通常需要先釐清機關處分的合理性以及合約的具體約定。建議您核對與機關的公文往來，並注意 15 天或 20 天的法定救濟不變期間，避免權益受損。';
+    // 依據問題動態產生非制式的 conversational_answer
+    let conversationalAnswerText = '針對您的採購法規問題，這在實務上通常需要先釐清機關處分的合理性以及合約的具體約定。建議您核對與機關的公文往來，並注意 15 天 or 20 天的法定救濟不變期間，避免權益受損。';
     const cleanQ = question.toLowerCase();
     if (cleanQ.includes('22條') || cleanQ.includes('限制性')) {
-        chatReplyText = '關於您提到的限制性招標（第 22 條）爭議，主要問題在於確認機關是否具備法定適用事由（如專利、獨家或緊急事故）。若無合理依據即限制其他廠商參標，可能涉嫌限制競爭。建議您立即在招標公告等標期內提出書面異議。';
+        conversationalAnswerText = '關於您提到的限制性招標（第 22 條）爭議，主要問題在於確認機關是否具備法定適用事由（如專利、獨家或緊急事故）。若無合理依據即限制其他廠商參標，可能涉嫌限制競爭。建議您立即在招標公告等標期內提出書面異議。';
     } else if (cleanQ.includes('101') || cleanQ.includes('停權') || cleanQ.includes('刊登公報')) {
-        chatReplyText = '關於刊登政府採購公報停權（第 101 條）的處分，實務要求必須有重大的「可歸責性」與惡意。如果僅是文件漏蓋章或文字填寫疏失等輕微違失，機關逕行停權已違反行政法的比例原則。建議收到通知的 20 日內，務必依法提出書面異議，並準備向申訴會申訴。';
+        conversationalAnswerText = '關於刊登拒絕往來公報停權（第 101 條）的處分，實務要求必須有重大的「可歸責性」與惡意。如果僅是文件漏蓋章或文字填寫疏失等輕微違失，機關逕行停權已違反行政法的比例原則。建議收到通知的 20 日內，務必依法提出書面異議，並準備向申訴會申訴。';
     } else if (cleanQ.includes('31') || cleanQ.includes('追繳') || cleanQ.includes('沒收')) {
-        chatReplyText = '關於沒收或追繳押標金（第 31 條）的疑義，實務上要求必須有影響公正投標之惡意串通或偽造文件等違法事實，若僅是純文書疏失，追繳屬於違法。此外，機關必須在行為發生起 5 年內行使權利，否則即因時效消滅不得追繳。建議您確認通知時效並於 15 日內提出異議。';
+        conversationalAnswerText = '關於沒收或追繳押標金（第 31 條）的疑義，實務上要求必須有影響公正投標之惡意串通或偽造文件等違法事實，若僅是純文書疏失，追繳屬於違法。此外，機關必須在行為發生起 5 年內行使權利，否則即因時效消滅不得追繳。建議您確認通知時效並於 15 日內提出異議。';
     } else if (cleanQ.includes('63') || cleanQ.includes('合約') || cleanQ.includes('契約')) {
-        chatReplyText = '本案屬於契約條款（第 63 條）與履約責任爭議。若合約有失衡或顯失公平條款，在法律上可依情事變更或民法裁量主張合約變更。如果機關扣罰的逾期違約金過高，您可以在調解或訴訟程序中，主張依法酌減違約金金額。';
+        conversationalAnswerText = '本案屬於契約條款（第 63 條）與履約責任爭議。若合約有失衡或顯失公平條款，在法律上可依情事變更或民法裁量主張合約變更。如果機關扣罰的逾期違約金過高，您可以在調解或訴訟程序中，主張依法酌減違約金金額。';
     } else if (cleanQ.includes('押標金') || cleanQ.includes('保證金')) {
-        chatReplyText = '沒收或追繳押標金必須以廠商具有借牌、圍標或故意提供不實文件等惡意行為為要件。若僅是文件漏蓋章、填寫錯誤等單純文書瑕疵而導致不合格標，機關予以沒收追繳是不合理的。建議您核對有無涉案背景，並於 15 日內提出異議。';
+        conversationalAnswerText = '沒收或追繳押標金必須以廠商具有借牌、圍標或故意提供不實文件等惡意行為為要件。若僅是文件漏蓋章、填寫錯誤等單純文書瑕疵而導致不合格標，機關予以沒收追繳是不合理的。建議您核對有無涉案背景，並於 15 日內提出異議。';
     } else if (cleanQ.includes('驗收') || cleanQ.includes('變更') || cleanQ.includes('違約金')) {
-        chatReplyText = '針對驗收與逾期違約金的爭議，若擺疵並非重大且不影響安全，應積極向機關主張依第 72 條辦理減價收受。對於工期逾期，必須先主張扣除不可歸責廠商的天數（例如天災、工地交付延遲等）；若違約金計處過高，亦可在調解或訴訟中聲請依法酌減。';
+        conversationalAnswerText = '針對驗收與逾期違約金 the 爭議，若擺疵並非重大且不影響安全，應積極向機關主張依第 72 條辦理減價收受。對於工期逾期，必須先主張扣除不可歸責廠商的天數（例如天災、工地交付延遲等）；若違約金計處過高，亦可在調解或訴訟中聲請依法酌減。';
     } else if (cleanQ.includes('填錯') || cleanQ.includes('漏蓋') || cleanQ.includes('合理')) {
-        chatReplyText = '投標文件填錯或漏蓋章等情形在採購法上僅屬「不合格標」的事由。若機關據此對您做出刊登公報停權或追繳押標金等嚴重處分，實務上皆認定違反行政法比例原則。因為文書筆誤不具有違法的「惡意與可歸責性」。建議您在收到機關通知 20 日內依法提出異議。';
+        conversationalAnswerText = '投標文件填錯或漏蓋章等情形在採購法上僅屬「不合格標」的事由。若機關據此對您做出刊登公報停權或追繳押標金等嚴重處分，實務上皆認定違反行政法比例原則。因為文書筆誤不具有違法的「惡意與可歸責性」。建議您在收到機關通知 20 日內依法提出異議。';
     }
-    result.chat_reply = chatReplyText;
+    
+    result.conversational_answer = conversationalAnswerText;
+    result.reasonability = reasonabilityText;
+    result.win_rate = winRateText;
+    result.verdict_reason = verdictReasonText;
+    result.law_analysis = lawAnalysisText;
+    result.action_suggestions = actionSuggestionsText;
+    result.dos = dos.slice(0, 4);
+    result.donts = donts.slice(0, 4);
 
     return result;
 }
 
-// === 呼叫 Google Gemini API 進行 RAG 語意分析 ===
-async function callGeminiAPI(question, retrievedRulings, retrievedJudgments) {
+// === 呼叫 Google Gemini API 進行語意分析與對話 ===
+async function callGeminiAPI(contentsArray) {
     const models = ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
-
-    // 限制只取前 2 筆最相關資料，且內容截斷至 600 字，避免觸發免費版 40,000 TPM (每分鐘Token) 的上限限制
-    const rulingsCtx = retrievedRulings.slice(0, 2).map((r, i) => 
-        `【工程會函釋 ${i+1}】\n發文字號：${r.發文字號 || '無'}\n主題：${r.主題}\n內容：${(r.內容 || '').slice(0, 600)}...\n連結：${r.連結網址}`
-    ).join('\n\n');
-
-    const judgmentsCtx = retrievedJudgments.slice(0, 2).map((j, i) => 
-        `【法院判決 ${i+1}】\n案號：${j.案號 || '無'}\n法院：${j.裁判法院}\n主文：${j.裁判主文}\n內容：${(j.內容 || '').slice(0, 600)}...\n連結：${j.連結網址}`
-    ).join('\n\n');
-
-    const prompt = `你是一位精通中華民國政府採購法的資深大律師。請針對使用者提出的口語問題，結合系統檢索到的工程會實務函釋及法院判決案例，提供一份專業的法律諮詢意見書。
     
-以下為系統檢索出的相關參考資料：
----
-【工程會相關函釋】
-${rulingsCtx || '未檢索到直接相關函釋。'}
-
-【法院相關裁判案例】
-${judgmentsCtx || '未檢索到直接相關判決。'}
----
-
-請依據上述資料及中華民國政府採購法，客觀且專業地分析使用者問題，並嚴格以下列的 JSON 格式回傳（不要包含任何 Markdown 格式框或 \`\`\`json 標記，僅回傳純 JSON 內容）：
-{
-  "chat_reply": "對使用者口語問題的直接、口語化且無任何制式小標題的回應（約 150-250 字）。請直接解答使用者的問題，指出可能面臨的問題以及建議如何處理。切記：在此欄位中絕對不要包含『【AI 判定】』、『勝訴率』或『【專業行動對策建議】』等字眼或小標題，請保持像與真人律師自然聊天對話般的友善口吻回答。",
-  "legal_judgment": "針對使用者的採購糾紛或法規爭議，給予一個明確且直指核心的 AI 法律判定結論，包含合理性判定與勝率評估（約 100-150 字，例如：『【AI 判定：極可能不合理，勝訴率高】本案機關以廠商投標文件單純填寫錯誤為由擬刊登採購法第101條停權，因廠商並非故意虛偽不實，且無重大可歸責事由，本件停權處分顯然違反比例原則，若提出行政救濟勝訴率極高。建議儘速依程序異議申訴。』）",
-  "core_analysis": "核心法律問題分析與適用法條（約 150 字，明確提及涉及的採購法條文）",
-  "pcc_views": "工程會實務函釋之見解摘要（約 150 字，說明主管機關的態度）",
-  "court_ruling_views": "司法法院判決案例之見解與訴訟勝敗關鍵分析（約 150 字）",
-  "professional_advice": "給使用者的具體行動建議與解決途徑（約 200 字，說明如何向機關主張或進行後續救濟）",
-  "dos": [
-    "應採取的行動或應注意事項 1",
-    "應採取的行動或應注意事項 2",
-    "應採取的行動或應注意事項 3"
-  ],
-  "donts": [
-    "應避免的事項或法律紅線 1",
-    "應避免的事項或法律紅線 2",
-    "應避免的事項或法律紅線 3"
-  ]
-}
-
-使用者口語問題：「${question}」
-JSON 輸出：`;
-
-    lastAiPromptText = prompt; // 快取 Prompt 文字供後續對話使用
+    if (!geminiApiKey) {
+        throw new Error('未設定 Gemini API 金鑰，請先在設定中配置。');
+    }
 
     const requestBody = {
-        contents: [
-            {
-                parts: [
-                    {
-                        text: prompt
-                    }
-                ]
-            }
-        ],
+        contents: contentsArray,
         generationConfig: {
-            responseMimeType: "application/json"
+            responseMimeType: "application/json",
+            temperature: 0.25
         }
     };
 
     let lastError = null;
 
-    // 依序嘗試呼叫不同模型（實現與工程督導系統相同的降級容錯機制）
     for (const modelName of models) {
         try {
             console.log(`[Gemini API] 正在嘗試呼叫模型: ${modelName}...`);
@@ -1052,10 +1024,7 @@ JSON 輸出：`;
                 throw new Error(`${modelName} 失敗: AI 未回傳有效內容`);
             }
 
-            const parsed = JSON.parse(resultText.trim());
-            parsed.isLocal = false;
-            console.log(`[Gemini API] 模型 ${modelName} 呼叫成功！`);
-            return parsed;
+            return { model: modelName, text: resultText };
 
         } catch (err) {
             console.warn(`[Gemini API] 模型 ${modelName} 異常，準備嘗試備用模型。原因:`, err.message);
@@ -1063,392 +1032,773 @@ JSON 輸出：`;
         }
     }
 
-    // 所有模型都失敗時，拋出最後一個錯誤
     throw lastError || new Error('所有備用 Gemini 模型皆呼叫失敗');
 }
 
-// === 呼叫 Google Gemini API 進行多輪對答 (Chat) ===
-async function callGeminiChatAPI(history) {
-    const models = ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
-    
-    if (!geminiApiKey) {
-        throw new Error('未設定 Gemini API 金鑰，請先在設定中配置。');
+// === 建立 RAG 提示詞內容 ===
+function buildRagPrompt(question, retrievedRulings, retrievedJudgments, isFollowUp) {
+    const rulingsCtx = retrievedRulings.slice(0, 2).map((r, i) => 
+        `【工程會函釋 ${i+1}】\n發文字號：${r.發文字號 || '無'}\n主題：${r.主題}\n內容：${(r.內容 || '').slice(0, 600)}...\n連結：${r.連結網址}`
+    ).join('\n\n');
+
+    const judgmentsCtx = retrievedJudgments.slice(0, 2).map((j, i) => 
+        `【法院判決 ${i+1}】\n案號：${j.案號 || '無'}\n法院：${j.裁判法院}\n主文：${j.裁判主文}\n內容：${(j.內容 || '').slice(0, 600)}...\n連結：${j.連結網址}`
+    ).join('\n\n');
+
+    const systemInstruction = 
+        `你是一位精通中華民國政府採購法的資深大律師，精通政府採購法、行政院公共工程委員會主管行政函釋與民刑事裁判書。\n` +
+        `請根據使用者提出的具體採購法爭議事件，並參考以下檢索出的本機 RAG 文獻，進行深入的法律合理性判定與勝率評估。若無直接相關的文獻，請以一般採購法令與採購契約範本進行專業研判。\n` +
+        `你必須完全以繁體中文回答，並且輸出內容必須是嚴格的 JSON 格式，不可以有額外的解釋文字。JSON 格式如下：\n` +
+        `{\n` +
+        `  "conversational_answer": "給使用者的口語化直白回覆。請直接且人性化地回答使用者的問題，『問什麼就回答什麼』。口吻應像一位貼心、溫柔、懂法律的專業律師朋友。千萬不要制式化。請務必在回覆內容中直接且自然地融入相關的法規法條或工程會函釋字號作為依據（引用的法條包括法規名稱與具體條號，例如：依據政府採購法第101條規定、或依照工程會112年X月X日工程企字第XXXX號函釋等），直接以最白話、溫柔、明確且有法律實據的方式回答他的疑問即可。不用多餘的問候或贅言，直奔主題答覆他。",\n` +
+        `  "reasonability": "核心研判結論，格式應為：『行為判定：具體違法或合理說明（違反法規條號）』。例如：『機關沒收押標金違反採購法第31條』，或『擬刊登公報處分違反比例原則與採購法第101條』，或『廠商請求返還履約保證金具法律依據』。切勿使用籠統或模糊的句子，必須明確寫出行為主體、具體行為與相關法規。",\n` +
+        `  "win_rate": "例如：90% 或 35%",\n` +
+        `  "verdict_reason": "一句話總結判定原因，應簡潔有力、高質感且專業。",\n` +
+        `  "law_analysis": "針對適用法條的詳細解析，指出違反何法條，論述邏輯嚴謹。可使用 **粗體** 強調重點。",\n` +
+        `  "action_suggestions": "給予廠商/當事人的具體實操行動建議，告訴他如何收集證據、提出異議或進行申訴調解。",\n` +
+        `  "dos": ["應於收受處分20日內提出書面異議", "應保留與機關往來的所有公文與會議紀錄", "應向行政法院聲請停止執行以防先行停權"],\n` +
+        `  "donts": ["切勿忽視機關通知並放任異議期限逾期", "不要擅自簽署拋棄逾期工期扣除之驗收文件", "不要任意配合其他廠商借牌投標以免涉刑責"]\n` +
+        `}\n\n`;
+
+    let contextPromptText = '';
+    if (rulingsCtx || judgmentsCtx) {
+        contextPromptText = `【本機 RAG 檢索參考文獻（限制前600字）】：\n${rulingsCtx}\n\n${judgmentsCtx}\n\n`;
+    } else {
+        contextPromptText = `【本機 RAG 檢索參考文獻】：針對本次問題，本機資料庫中無直接相關的法條、函釋與裁判書。\n\n`;
     }
 
-    const requestBody = {
-        contents: history
-    };
-
-    let lastError = null;
-
-    for (const modelName of models) {
-        try {
-            console.log(`[Gemini Chat API] 正在嘗試呼叫模型: ${modelName}...`);
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`;
-            
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                const msg = errData.error?.message || `HTTP 錯誤 ${response.status}`;
-                throw new Error(`${modelName} 失敗: ${msg}`);
-            }
-
-            const resData = await response.json();
-            const resultText = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!resultText) {
-                throw new Error(`${modelName} 失敗: AI 未回傳有效內容`);
-            }
-
-            console.log(`[Gemini Chat API] 模型 ${modelName} 呼叫成功！`);
-            return resultText;
-
-        } catch (err) {
-            console.warn(`[Gemini Chat API] 模型 ${modelName} 異常，準備嘗試備用模型。原因:`, err.message);
-            lastError = err;
-        }
-    }
-
-    throw lastError || new Error('所有備用 Gemini 模型皆呼叫失敗');
-}
-
-// === 處理 AI 大律師諮詢提交 ===
-async function handleAiLawyerConsult() {
-    const question = aiQuestionInput.value.trim();
-    if (!question) {
-        alert('請先輸入您的採購問題！');
-        aiQuestionInput.focus();
-        return;
-    }
-
-    // 1. 本地 RAG 檢檢索相關資料
-    const retrieved = localRAGRetrieve(question);
-
-    // 2. 判斷是否有 API 金鑰，若無則走本地智慧引擎
-    if (!geminiApiKey) {
-        try {
-            const result = localSemanticParse(question);
-            lastRetrievedDocs = retrieved;
-            aiChatHistory = []; // 本地模式清空對話歷史，不支援互動
-            renderAiLawyerReport(question, result, retrieved);
-        } catch (err) {
-            console.error('本地分析失敗：', err);
-            alert(`本地分析失敗：${err.message}`);
-        }
-        return;
-    }
-
-    // 3. 有金鑰，進入載入中狀態並呼叫 Gemini RAG
-    btnAiSubmit.disabled = true;
-    const originalText = btnAiSubmit.innerHTML;
-    btnAiSubmit.innerHTML = `
-        <span class="pulse-indicator" style="background-color: #ffffff; box-shadow: 0 0 0 0 rgba(255,255,255,0.7); animation: pulse-white 1s infinite; margin-right: 0.5rem; vertical-align: middle;"></span>
-        AI 大律師法律研判中...
-    `;
-
-    // 動態載入白色 pulse 的 style
-    if (!document.getElementById('pulse-white-style')) {
-        const style = document.createElement('style');
-        style.id = 'pulse-white-style';
-        style.innerHTML = `
-            @keyframes pulse-white {
-                0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
-                70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
-                100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    try {
-        const result = await callGeminiAPI(question, retrieved.rulings, retrieved.judgments);
-        
-        // 成功取得後，更新快取並初始化對話歷史
-        lastRetrievedDocs = retrieved;
-        aiChatHistory = [];
-        // 將初始 RAG 提示詞做為第一輪 User 輸入
-        aiChatHistory.push({
-            role: 'user',
-            parts: [{ text: lastAiPromptText }]
-        });
-        // 將口語化的初次答覆做為第一輪 Model 回答，避免傳入原始 JSON 導致後續回覆夾帶程式碼標記
-        aiChatHistory.push({
-            role: 'model',
-            parts: [{ text: result.chat_reply || '我已為您完成深度法律研判，詳細分析已呈現在意見書中。' }]
-        });
-
-        renderAiLawyerReport(question, result, retrieved);
-    } catch (err) {
-        console.error('AI 智慧分析失敗：', err);
-        const errorMsg = err.message || '';
-        
-        // 彈出詳細診斷訊息，方便使用者排除問題
-        alert(`AI 大律師法律研判失敗！\n\n【詳細錯誤原因】\n${errorMsg}\n\n【故障排除建議】\n1. 若訊息顯示 "API key not valid..."：代表您的 API 金鑰輸入有誤或複製不完整。\n2. 若訊息顯示 "billing or location limits..." 或 "Quota exceeded..."：這代表該 Google 帳號的專案受限（例如：使用公司/學校的 Google Workspace 帳號被系統停用、或專案未啟用 Generative Language API）。\n3. 若訊息顯示 "User location is not supported..."：代表您目前的網路 IP 地區（例如使用了特定 VPN）不支援 Gemini 服務。\n\n💡 溫馨提示：您可以點擊右上角「齒輪 ⚙️」將金鑰清空並儲存，即可直接體驗強大且無限制的「本地專家規則解析意見書」！`);
-    } finally {
-        btnAiSubmit.disabled = false;
-        btnAiSubmit.innerHTML = originalText;
+    if (!isFollowUp) {
+        return `${systemInstruction}\n` +
+               `${contextPromptText}` +
+               `【使用者諮詢問題】：\n${question}\n\n` +
+               `請開始法律分析，僅回傳符合上述結構的 JSON 物件：`;
+    } else {
+        return `${systemInstruction}\n` +
+               `${contextPromptText}` +
+               `【使用者追問】：\n${question}\n\n` +
+               `請結合先前的對話歷史與本次檢索文獻，繼續進行法律分析，僅回傳符合上述結構的 JSON 物件：`;
     }
 }
 
-// === 渲染意見書 ===
-function renderAiLawyerReport(question, result, retrieved) {
-    const modeBadge = result.isLocal 
-        ? `<span class="ai-mode-badge" style="font-size: 0.75rem; background-color: var(--border-color); color: var(--text-secondary); padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 500; border: 1px solid var(--border-color);">本地專家規則解析</span>`
-        : `<span class="ai-mode-badge" style="font-size: 0.75rem; background-color: rgba(99, 102, 241, 0.15); color: #818cf8; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 500; border: 1px solid rgba(99, 102, 241, 0.3);">Gemini 大律師 AI 研判</span>`;
+// === 初始化 Tab 3 AI 對話工作區 ===
+function initAiWorkspace() {
+    const toggleBtn = document.getElementById('ai-sidebar-toggle');
+    const sidebar = document.getElementById('ai-sidebar');
+    const newChatBtn = document.getElementById('ai-new-chat-btn');
+    const sendBtn = document.getElementById('ai-chat-send-btn');
+    const voiceBtn = document.getElementById('ai-chat-voice-btn');
+    const chatInput = document.getElementById('ai-chat-input');
 
-    const dosHtml = result.dos.map(item => `<li class="list-item">${escapeHtml(item)}</li>`).join('');
-    const dontsHtml = result.donts.map(item => `<li class="list-item">${escapeHtml(item)}</li>`).join('');
-
-    let refHtml = '';
-    const allRefs = retrieved.rulings.concat(retrieved.judgments);
-    if (allRefs.length > 0) {
-        const badges = allRefs.map(ref => {
-            const isJudg = ref.資料來源.includes('裁判');
-            const label = isJudg ? (ref.案號 || '判決') : (ref.發文字號 || '函釋');
-            const titleText = ref.主題 || ref.裁判主文 || '';
-            return `<a href="${ref.連結網址}" target="_blank" rel="noopener noreferrer" class="reference-badge" title="${escapeHtml(titleText)}">${escapeHtml(label)}</a>`;
-        }).join('');
+    // 側邊欄收合按鈕 (支援行動裝置預設收合)
+    if (toggleBtn && sidebar) {
+        const isMobile = window.innerWidth <= 768;
+        const storedCollapsed = localStorage.getItem('ai_sidebar_collapsed');
+        let isCollapsed = true;
+        if (storedCollapsed !== null) {
+            isCollapsed = (storedCollapsed === 'true');
+        } else {
+            isCollapsed = isMobile; // 行動裝置預設收合，桌機預設展開
+        }
         
-        refHtml = `
-            <div class="reference-section-title">相關法律實務參考連結（意見書參考依據）：</div>
-            <div class="reference-list">${badges}</div>
-        `;
+        if (isCollapsed) {
+            sidebar.classList.add('collapsed');
+        } else {
+            sidebar.classList.remove('collapsed');
+        }
+        
+        toggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            localStorage.setItem('ai_sidebar_collapsed', sidebar.classList.contains('collapsed'));
+        });
     }
 
-    // 建立 AI 律師互動對答的初始語意氣泡（使用純口語的直接回答，避免制式標題與勝率重複呈現）
-    const initialAiMessage = result.chat_reply || `您好！我是您的 AI 採購法律助手。針對您提出的問題，我已檢索相關案例與法規背景並完成了深度研判，您可於下方查閱完整的詳細分析意見書與行動建議。
+    // 新增對話按鈕
+    if (newChatBtn) {
+        newChatBtn.addEventListener('click', resetAiChat);
+    }
 
-如果您對我的回答還有任何疑問，或有更多細節想要補充，可以在下方直接輸入並「繼續追問」！`;
+    // 傳送按鈕
+    if (sendBtn) {
+        sendBtn.addEventListener('click', handleAiChatSend);
+    }
 
-    aiGuideContainer.innerHTML = `
-        <div class="ai-lawyer-report">
-            <div class="report-header">
-                <div class="report-title-area">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                    <div>
-                        <div class="report-title">AI 大律師採購爭議研判意見書</div>
-                        <div class="report-subtitle">針對問題：「${escapeHtml(question.slice(0, 35))}${question.length > 35 ? '...' : ''}」的法律意見書</div>
-                    </div>
-                </div>
-                ${modeBadge}
-            </div>
+    // 輸入框按 Enter 鍵傳送 (Shift+Enter 換行)
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleAiChatSend();
+            }
+        });
+    }
 
-            <!-- AI 互動對答區 (AI Chat) -->
-            <div class="ai-chat-section">
-                <div class="ai-chat-title">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; color: var(--primary-hover);"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                    <span>⚖️ AI 律師互動對答區</span>
-                </div>
-                <div class="chat-history" id="chat-history-container">
-                    <div class="chat-bubble ai">${escapeHtml(initialAiMessage).replace(/\n/g, '<br>')}</div>
-                </div>
-                
-                ${geminiApiKey && !result.isLocal ? `
-                <div class="chat-input-area">
-                    <textarea class="chat-input" id="chat-followup-input" placeholder="對回答不滿意？請輸入您的案情細節或問題繼續追問大律師... (例如：可是我們是因為天災延遲，機關仍算在我們頭上...)"></textarea>
-                    <button type="button" class="btn btn-primary btn-chat-send" id="btn-chat-send">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                        發送追問
-                    </button>
-                </div>
-                ` : `
-                <div style="font-size: 0.85rem; color: var(--text-secondary); text-align: center; padding: 0.5rem; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px dashed var(--border-color);">
-                    💡 溫馨提示：設定 Gemini API 金鑰且啟用 API 查詢時，即可在此直接「繼續追問」大律師！目前正使用本地專家規則解析。
-                </div>
-                `}
-            </div>
-            
-            <div class="verdict-banner" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.12)); border: 1.5px solid rgba(139, 92, 246, 0.4); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 20px -2px rgba(139, 92, 246, 0.2); display: flex; gap: 1rem; align-items: flex-start;">
-                <div style="background: linear-gradient(135deg, #8b5cf6, #ec4899); color: white; border-radius: 50%; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 4px 10px rgba(139, 92, 246, 0.3);">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="3"/><path d="M12 14c-1.5 0-3-.5-3-1.5V11h6v1.5c0 1-1.5 1.5-3 1.5z"/></svg>
-                </div>
-                <div style="flex: 1;">
-                    <div style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.5rem;">
-                        AI 王牌大律師合理性判定與勝率評估
-                        <span class="pulse-indicator" style="background-color: var(--accent-success, #10b981); width: 8px; height: 8px; border-radius: 50%; animation: pulse 1.6s infinite;"></span>
-                    </div>
-                    <div style="font-size: 0.95rem; line-height: 1.6; color: var(--text-primary); font-weight: 500; white-space: pre-line;">
-                        ${escapeHtml(result.legal_judgment || '本案法律判定載入中...')}
-                    </div>
-                </div>
-            </div>
-            
-            <div class="report-grid">
-                <div class="report-card">
-                    <div class="report-card-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                        1. 核心法律與條文分析
-                    </div>
-                    <div class="report-card-content">${escapeHtml(result.core_analysis)}</div>
-                </div>
-                
-                <div class="report-card">
-                    <div class="report-card-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                        2. 工程會主管機關實務見解
-                    </div>
-                    <div class="report-card-content">${escapeHtml(result.pcc_views)}</div>
-                </div>
-                
-                <div class="report-card">
-                    <div class="report-card-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        3. 司法判決案例見解與勝敗關鍵
-                    </div>
-                    <div class="report-card-content">${escapeHtml(result.court_ruling_views)}</div>
-                </div>
-                
-                <div class="report-card">
-                    <div class="report-card-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-                        4. AI 大律師專業對策建議
-                    </div>
-                    <div class="report-card-content" style="color: var(--primary-hover); font-weight: 500;">${escapeHtml(result.professional_advice)}</div>
-                </div>
-            </div>
-            
-            <div class="dos-donts-container">
-                <div class="dos-panel">
-                    <div class="panel-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        應注意事項 / 應採取的行動 (Dos)
-                    </div>
-                    <ul class="list-container">
-                        ${dosHtml || '<li class="list-item">無特別注意事項</li>'}
-                    </ul>
-                </div>
-                
-                <div class="donts-panel">
-                    <div class="panel-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        應避免事項 / 違法紅線 (Don'ts)
-                    </div>
-                    <ul class="list-container">
-                        ${dontsHtml || '<li class="list-item">無特別避免事項</li>'}
-                    </ul>
-                </div>
-            </div>
-            
-            ${refHtml}
-        </div>
-    `;
+    // 初始化語音辨識
+    initSpeechRecognition();
 
-    // 綁定發送追問按鈕與 Enter 鍵事件
-    if (geminiApiKey && !result.isLocal) {
-        const sendBtn = document.getElementById('btn-chat-send');
-        const chatInput = document.getElementById('chat-followup-input');
-        if (sendBtn && chatInput) {
-            sendBtn.addEventListener('click', handleAiChatFollowUp);
-            chatInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleAiChatFollowUp();
+    // 匯出備份按鈕
+    const exportBtn = document.getElementById('ai-export-btn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', exportSessionsBackup);
+    }
+
+    // 匯入備份按鈕
+    const importBtn = document.getElementById('ai-import-btn');
+    const importFileInput = document.getElementById('ai-import-file-input');
+    if (importBtn && importFileInput) {
+        importBtn.addEventListener('click', () => {
+            importFileInput.click();
+        });
+        importFileInput.addEventListener('change', importSessionsBackup);
+    }
+
+    // 渲染側邊欄對話清單
+    renderSidebar();
+
+    // 載入最上層對話
+    if (aiSessions.length > 0) {
+        loadSession(aiSessions[0].id);
+    } else {
+        resetAiChat();
+    }
+}
+
+// === 初始化語音辨識機制 ===
+let voiceRecognition = null;
+let isRecording = false;
+
+function initSpeechRecognition() {
+    const voiceBtn = document.getElementById('ai-chat-voice-btn');
+    const chatInput = document.getElementById('ai-chat-input');
+    if (!voiceBtn || !chatInput) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+        voiceRecognition = new SpeechRecognition();
+        voiceRecognition.continuous = true;
+        voiceRecognition.interimResults = true;
+        voiceRecognition.lang = 'zh-TW';
+
+        voiceRecognition.onstart = () => {
+            isRecording = true;
+            voiceBtn.classList.add('recording-active');
+            chatInput.placeholder = '🎤 正在辨識您的語音，請說話... (結束請再點擊麥克風即可自動傳送並判讀)';
+            chatInput.focus();
+        };
+
+        voiceRecognition.onresult = (event) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
                 }
-            });
-        }
+            }
+            if (finalTranscript || interimTranscript) {
+                chatInput.value = finalTranscript + interimTranscript;
+            }
+        };
+
+        voiceRecognition.onerror = (event) => {
+            console.error('語音辨識錯誤:', event.error);
+            if (event.error === 'not-allowed') {
+                alert('麥克風權限已被拒絕。請開啟瀏覽器麥克風權限後重試。');
+            } else {
+                alert('語音辨識發生錯誤: ' + event.error);
+            }
+            stopRecording();
+        };
+
+        voiceRecognition.onend = () => {
+            isRecording = false;
+            voiceBtn.classList.remove('recording-active');
+            chatInput.placeholder = '請輸入您遇到的採購法爭議問題... (例如：漏蓋章被沒收押標金合理嗎？)';
+            
+            const text = chatInput.value.trim();
+            if (text) {
+                handleAiChatSend();
+            }
+        };
+
+        voiceBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                startRecording();
+            } else {
+                stopRecording();
+            }
+        });
+    } else {
+        voiceBtn.style.display = 'none';
+        console.warn('瀏覽器不支援 Web Speech API (語音輸入)');
     }
-    
-    aiGuideContainer.scrollIntoView({ behavior: 'smooth' });
 }
 
-// === 處理使用者追問互動邏輯 ===
-async function handleAiChatFollowUp() {
-    const chatInput = document.getElementById('chat-followup-input');
-    const sendBtn = document.getElementById('btn-chat-send');
-    const historyContainer = document.getElementById('chat-history-container');
-    
-    if (!chatInput || !sendBtn || !historyContainer) return;
-    
-    const followUpText = chatInput.value.trim();
-    if (!followUpText) return;
-    
-    // 1. 禁用輸入與按鈕防止重複送出
+function startRecording() {
+    if (!voiceRecognition) return;
+    const chatInput = document.getElementById('ai-chat-input');
+    if (chatInput) chatInput.value = '';
+    try {
+        voiceRecognition.start();
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+function stopRecording() {
+    if (!voiceRecognition) return;
+    try {
+        voiceRecognition.stop();
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+// === 處理發送對話與 RAG/Gemini 呼叫 ===
+async function handleAiChatSend() {
+    const chatInput = document.getElementById('ai-chat-input');
+    const messagesContainer = document.getElementById('ai-chat-messages');
+    if (!chatInput || !messagesContainer) return;
+
+    const question = chatInput.value.trim();
+    if (!question) return;
+
+    // 停用輸入框與發送鍵防止重複提交
     chatInput.disabled = true;
-    sendBtn.disabled = true;
-    
-    // 2. 在對話歷史中插入使用者的泡泡
-    const userBubble = document.createElement('div');
-    userBubble.className = 'chat-bubble user';
-    userBubble.textContent = followUpText;
-    historyContainer.appendChild(userBubble);
-    
-    // 滾動到底部
-    historyContainer.scrollTop = historyContainer.scrollHeight;
-    
-    // 3. 插入 AI 的讀取中泡泡
+    const sendBtn = document.getElementById('ai-chat-send-btn');
+    if (sendBtn) sendBtn.disabled = true;
+
+    // 1. 插入使用者訊息氣泡
+    appendUserBubble(question);
+
+    // 清空輸入框
+    chatInput.value = '';
+
+    // 2. 插入 AI 的讀取中(Loading)泡泡
     const loadingBubble = document.createElement('div');
-    loadingBubble.className = 'chat-bubble ai loading-bubble';
+    loadingBubble.className = 'chat-bubble ai-bubble loading-bubble';
     loadingBubble.innerHTML = `
         <span class="loading-dot"></span>
         <span class="loading-dot"></span>
         <span class="loading-dot"></span>
     `;
-    historyContainer.appendChild(loadingBubble);
-    historyContainer.scrollTop = historyContainer.scrollHeight;
-    
-    // 4. 將使用者訊息加入全域歷史紀錄
-    aiChatHistory.push({
-        role: 'user',
-        parts: [{ text: followUpText }]
+    messagesContainer.appendChild(loadingBubble);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // 3. 執行本機 RAG 檢索與文獻合併
+    const retrieved = localRAGRetrieve(question);
+    const isFollowUp = (aiChatHistory.length > 0);
+
+    const turnRefs = retrieved.rulings.concat(retrieved.judgments);
+    turnRefs.forEach(ref => {
+        if (!accumulatedReferences.some(r => r.連結網址 === ref.連結網址)) {
+            accumulatedReferences.push(ref);
+        }
     });
-    
-    // 清空輸入框
-    chatInput.value = '';
-    
+
+    // 4. 若無當前 Session，則建立新對話
+    if (!activeSessionId) {
+        activeSessionId = Date.now().toString();
+        const title = question.slice(0, 12) + (question.length > 12 ? '...' : '');
+        aiSessions.unshift({
+            id: activeSessionId,
+            title: title,
+            isPinned: false,
+            conversationHistory: [],
+            accumulatedReferences: []
+        });
+    }
+
+    // 5. 判斷金鑰，無金鑰走本地解析
+    if (!geminiApiKey) {
+        setTimeout(() => {
+            if (messagesContainer.contains(loadingBubble)) {
+                messagesContainer.removeChild(loadingBubble);
+            }
+            const result = localSemanticParse(question);
+            appendAiBubble(result.conversational_answer, result, turnRefs);
+            
+            aiChatHistory.push({ role: 'user', parts: [{ text: question }] });
+            aiChatHistory.push({ role: 'model', parts: [{ text: JSON.stringify(result) }] });
+            
+            saveCurrentSession();
+            renderSidebar();
+            
+            chatInput.disabled = false;
+            if (sendBtn) sendBtn.disabled = false;
+            chatInput.focus();
+        }, 800);
+        return;
+    }
+
+    // 6. 有金鑰，呼叫 Gemini API
     try {
-        // 5. 呼叫 Gemini Chat API
-        const reply = await callGeminiChatAPI(aiChatHistory);
+        const turnPrompt = buildRagPrompt(question, retrieved.rulings, retrieved.judgments, isFollowUp);
+        aiChatHistory.push({ role: 'user', parts: [{ text: turnPrompt }] });
+
+        const response = await callGeminiAPI(aiChatHistory);
         
-        // 移除讀取中泡泡
-        if (historyContainer.contains(loadingBubble)) {
-            historyContainer.removeChild(loadingBubble);
+        if (messagesContainer.contains(loadingBubble)) {
+            messagesContainer.removeChild(loadingBubble);
         }
         
-        // 6. 插入 AI 的回覆泡泡
-        const aiBubble = document.createElement('div');
-        aiBubble.className = 'chat-bubble ai';
-        aiBubble.innerHTML = formatChatReply(reply);
-        historyContainer.appendChild(aiBubble);
+        const result = parseGeminiResponse(response.text);
+        appendAiBubble(result.conversational_answer || '我已為您研判完成。', result, turnRefs);
         
-        // 將 AI 回覆加入全域歷史紀錄
-        aiChatHistory.push({
-            role: 'model',
-            parts: [{ text: reply }]
-        });
-        
+        // 儲存 AI 回覆至歷史紀錄
+        aiChatHistory.push({ role: 'model', parts: [{ text: response.text }] });
+
+        saveCurrentSession();
+        renderSidebar();
     } catch (err) {
-        console.error('追問失敗：', err);
-        if (historyContainer.contains(loadingBubble)) {
-            historyContainer.removeChild(loadingBubble);
+        console.error(err);
+        if (messagesContainer.contains(loadingBubble)) {
+            messagesContainer.removeChild(loadingBubble);
         }
         
         const errorBubble = document.createElement('div');
-        errorBubble.className = 'chat-bubble ai';
-        errorBubble.style.borderColor = 'var(--accent-danger)';
-        errorBubble.innerHTML = `<span style="color: var(--accent-danger); font-weight: bold;">⚠️ 追問研判失敗：</span>${escapeHtml(err.message)}`;
-        historyContainer.appendChild(errorBubble);
+        errorBubble.className = 'chat-bubble ai-bubble';
+        errorBubble.style.borderColor = '#ef4444';
+        errorBubble.innerHTML = `<span style="color: #ef4444; font-weight: bold;">⚠️ 研判失敗：</span>${escapeHtml(err.message)}`;
+        messagesContainer.appendChild(errorBubble);
         
-        // 恢復輸入框原先的值
-        chatInput.value = followUpText;
+        // 移除最後一輪 User 輸入，讓使用者可以再次發送
+        aiChatHistory.pop();
     } finally {
         chatInput.disabled = false;
-        sendBtn.disabled = false;
+        if (sendBtn) sendBtn.disabled = false;
         chatInput.focus();
-        historyContainer.scrollTop = historyContainer.scrollHeight;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+}
+
+// === 氣泡節點繪製輔助函數 ===
+function appendUserBubble(text) {
+    const messagesContainer = document.getElementById('ai-chat-messages');
+    if (!messagesContainer) return;
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble user-bubble';
+    bubble.style.alignSelf = 'flex-end';
+    bubble.textContent = text;
+    
+    messagesContainer.appendChild(bubble);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function appendAiBubble(conversational_answer, result, turnRefs) {
+    const messagesContainer = document.getElementById('ai-chat-messages');
+    if (!messagesContainer) return;
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble ai-bubble';
+    bubble.style.alignSelf = 'flex-start';
+    bubble.style.width = '100%';
+    bubble.style.display = 'flex';
+    bubble.style.flexDirection = 'column';
+    bubble.style.gap = '0.5rem';
+
+    // 1. 口語化回答區
+    const answerDiv = document.createElement('div');
+    answerDiv.innerHTML = formatMarkdownText(conversational_answer);
+    bubble.appendChild(answerDiv);
+
+    // 2. 詳細 RAG 報告折疊區
+    if (result && result.reasonability) {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.type = 'button';
+        toggleBtn.className = 'toggle-report-btn';
+        toggleBtn.innerHTML = `
+            <span>📊 展開本輪 AI 核心研判報告 (勝率、法規紅綠燈)</span>
+            <svg class="chevron-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+        `;
+        
+        const reportDetails = document.createElement('div');
+        reportDetails.className = 'ai-report-details';
+
+        // Verdict Banner (勝率與合理性)
+        let bannerBg = "background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.03)); border: 1px solid rgba(239, 68, 68, 0.2);";
+        if (result.reasonability && (result.reasonability.includes("合理") || result.reasonability.includes("法律依據") || result.reasonability.includes("合法"))) {
+            bannerBg = "background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.03)); border: 1px solid rgba(16, 185, 129, 0.2);";
+        } else if (result.reasonability && result.reasonability.includes("爭議")) {
+            bannerBg = "background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(245, 158, 11, 0.03)); border: 1px solid rgba(245, 158, 11, 0.2);";
+        }
+
+        const banner = document.createElement('div');
+        banner.className = 'verdict-banner';
+        banner.style = `${bannerBg} margin-bottom: 0; padding: 1rem; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; gap: 1rem;`;
+        banner.innerHTML = `
+            <div style="flex: 1;">
+                <h3 style="font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); opacity: 0.7; margin: 0;">AI 核心合理性研判</h3>
+                <h2 style="font-size: 1rem; font-weight: 700; color: var(--text-primary); margin: 0.15rem 0 0.25rem 0;">${result.reasonability || '未判定'}</h2>
+                <div style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4; border-top: 1px solid var(--border-color); padding-top: 0.35rem; margin-top: 0.35rem;">
+                    <strong>核心理由：</strong>${result.verdict_reason || '無說明'}
+                </div>
+            </div>
+            <div style="flex-shrink: 0; padding: 0.3rem 0.6rem; border-radius: 8px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); text-align: center; min-width: 70px;">
+                <div style="font-size: 0.62rem; color: var(--text-secondary); opacity: 0.7;">預估勝率</div>
+                <div style="font-size: 1.1rem; font-weight: 700; color: var(--primary-hover);">${result.win_rate || '0%'}</div>
+            </div>
+        `;
+        reportDetails.appendChild(banner);
+
+        // Law analysis
+        const lawSec = document.createElement('div');
+        lawSec.style = 'margin-top: 0.75rem;';
+        lawSec.innerHTML = `
+            <h4 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.35rem; font-weight: 600;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                適用法條與爭點分析
+            </h4>
+            <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55; padding-left: 0.25rem;">${formatMarkdownText(result.law_analysis)}</div>
+        `;
+        reportDetails.appendChild(lawSec);
+
+        // Action suggestions
+        const suggestionsSec = document.createElement('div');
+        suggestionsSec.style = 'margin-top: 0.75rem;';
+        suggestionsSec.innerHTML = `
+            <h4 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.35rem; font-weight: 600;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                大律師具體行動對策
+            </h4>
+            <div style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55; padding-left: 0.25rem;">${formatMarkdownText(result.action_suggestions)}</div>
+        `;
+        reportDetails.appendChild(suggestionsSec);
+
+        // Dos & Donts
+        const lightsGrid = document.createElement('div');
+        lightsGrid.style = 'display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 0.75rem;';
+        
+        const dosBox = document.createElement('div');
+        dosBox.style = 'padding: 0.6rem 0.85rem; border-radius: 8px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.15);';
+        dosBox.innerHTML = `
+            <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem; color: #10b981; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
+                <span>✔️</span> Do's (應採取的行動)
+            </h5>
+            <ul style="display: flex; flex-direction: column; gap: 0.25rem; list-style: none; padding: 0; margin: 0; font-size: 0.8rem; color: var(--text-secondary);">
+                ${(result.dos || []).map(item => `<li style="line-height: 1.4;">• ${escapeHtml(item)}</li>`).join('')}
+            </ul>
+        `;
+        lightsGrid.appendChild(dosBox);
+
+        const dontsBox = document.createElement('div');
+        dontsBox.style = 'padding: 0.6rem 0.85rem; border-radius: 8px; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.15);';
+        dontsBox.innerHTML = `
+            <h5 style="font-size: 0.85rem; margin-bottom: 0.35rem; color: #ef4444; font-weight: 600; display: flex; align-items: center; gap: 0.25rem;">
+                <span>❌</span> Don'ts (法律紅線與避免)
+            </h5>
+            <ul style="display: flex; flex-direction: column; gap: 0.25rem; list-style: none; padding: 0; margin: 0; font-size: 0.8rem; color: var(--text-secondary);">
+                ${(result.donts || []).map(item => `<li style="line-height: 1.4;">• ${escapeHtml(item)}</li>`).join('')}
+            </ul>
+        `;
+        lightsGrid.appendChild(dontsBox);
+        reportDetails.appendChild(lightsGrid);
+
+        // Reference Links
+        if (turnRefs && turnRefs.length > 0) {
+            const refsSec = document.createElement('div');
+            refsSec.style = 'margin-top: 0.75rem;';
+            const badgesHtml = turnRefs.map(ref => {
+                const isJudg = ref.資料來源.includes('裁判');
+                const label = isJudg ? (ref.案號 || '判決') : (ref.發文字號 || '函釋');
+                const titleText = ref.主題 || ref.裁判主文 || '';
+                return `<a href="${ref.連結網址}" target="_blank" rel="noopener noreferrer" class="reference-badge" style="display: inline-block; margin-right: 0.4rem; margin-bottom: 0.4rem; padding: 0.25rem 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.75rem; color: var(--text-secondary); text-decoration: none; transition: var(--transition-smooth);" title="${escapeHtml(titleText)}">${escapeHtml(label)}</a>`;
+            }).join('');
+            
+            refsSec.innerHTML = `
+                <h4 style="color: var(--text-primary); font-size: 0.9rem; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.35rem; font-weight: 600;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                    本輪 RAG 檢索實務文獻
+                </h4>
+                <div style="padding-left: 0.25rem;">${badgesHtml}</div>
+            `;
+            reportDetails.appendChild(refsSec);
+        }
+
+        // Toggle action
+        toggleBtn.addEventListener('click', () => {
+            const isCollapsed = (reportDetails.style.display === 'none' || reportDetails.style.display === '');
+            reportDetails.style.display = isCollapsed ? 'flex' : 'none';
+            const icon = toggleBtn.querySelector('.chevron-icon');
+            if (icon) {
+                icon.style.transform = isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)';
+            }
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        });
+
+        bubble.appendChild(toggleBtn);
+        bubble.appendChild(reportDetails);
+    }
+
+    messagesContainer.appendChild(bubble);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+// === Markdown 格式化為 HTML 輔助函數 ===
+function formatMarkdownText(text) {
+    return parseMarkdownToHtml(text);
+}
+
+// === 側邊欄 Session 渲染與管理 ===
+function renderSidebar() {
+    const pinnedList = document.getElementById('ai-pinned-chats-list');
+    const recentList = document.getElementById('ai-recent-chats-list');
+    const modeStatus = document.getElementById('ai-mode-status');
+    if (!pinnedList || !recentList) return;
+
+    pinnedList.innerHTML = '';
+    recentList.innerHTML = '';
+
+    // 更新狀態列提示
+    if (modeStatus) {
+        modeStatus.textContent = geminiApiKey ? 'Gemini AI 大律師模式' : '本地專家智慧解析';
+    }
+
+    let pinnedCount = 0;
+    let recentCount = 0;
+
+    aiSessions.forEach(session => {
+        const item = document.createElement('div');
+        item.className = 'sidebar-item';
+        if (session.id === activeSessionId) item.classList.add('active');
+
+        item.innerHTML = `
+            <span class="sidebar-item-title">${escapeHtml(session.title)}</span>
+            <div class="sidebar-item-actions">
+                <button type="button" class="sidebar-action-btn pin-btn" title="${session.isPinned ? '取消釘選' : '釘選對話'}">
+                    ${session.isPinned ? '📍' : '📌'}
+                </button>
+                <button type="button" class="sidebar-action-btn delete-btn" title="刪除對話">🗑️</button>
+            </div>
+        `;
+
+        // 切換 Session
+        item.querySelector('.sidebar-item-title').addEventListener('click', () => {
+            loadSession(session.id);
+        });
+
+        // 釘選
+        item.querySelector('.pin-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePinSession(session.id);
+        });
+
+        // 刪除
+        item.querySelector('.delete-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteSession(session.id);
+        });
+
+        if (session.isPinned) {
+            pinnedList.appendChild(item);
+            pinnedCount++;
+        } else {
+            recentList.appendChild(item);
+            recentCount++;
+        }
+    });
+
+    if (pinnedCount === 0) {
+        pinnedList.innerHTML = '<div class="empty-list-text">無釘選對話</div>';
+    }
+    if (recentCount === 0) {
+        recentList.innerHTML = '<div class="empty-list-text">無歷史對話</div>';
+    }
+}
+
+function saveCurrentSession() {
+    if (!activeSessionId) return;
+    const session = aiSessions.find(s => s.id === activeSessionId);
+    if (session) {
+        session.conversationHistory = aiChatHistory;
+        session.accumulatedReferences = accumulatedReferences;
+        localStorage.setItem('mol_procure_sessions', JSON.stringify(aiSessions));
+    }
+}
+
+function loadSession(id) {
+    const session = aiSessions.find(s => s.id === id);
+    if (!session) return;
+
+    activeSessionId = id;
+    aiChatHistory = session.conversationHistory || [];
+    accumulatedReferences = session.accumulatedReferences || [];
+
+    const messagesContainer = document.getElementById('ai-chat-messages');
+    if (!messagesContainer) return;
+    
+    messagesContainer.innerHTML = '';
+
+    if (aiChatHistory.length === 0) {
+        showWelcomeBubble();
+    } else {
+        // 迴圈讀取對話歷程並還原
+        for (let i = 0; i < aiChatHistory.length; i++) {
+            const turn = aiChatHistory[i];
+            if (turn.role === 'user') {
+                let userQ = '';
+                const lines = turn.parts[0].text.split('\n');
+                let startExtract = false;
+                for (let j = 0; j < lines.length; j++) {
+                    if (lines[j].includes('【使用者諮詢問題】：') || lines[j].includes('【使用者追問】：')) {
+                        startExtract = true;
+                        continue;
+                    }
+                    if (startExtract) {
+                        if (lines[j].trim().startsWith('請開始法律分析') || lines[j].trim().startsWith('請結合先前的對話')) {
+                            break;
+                        }
+                        userQ += lines[j] + '\n';
+                    }
+                }
+                userQ = userQ.trim();
+                if (!userQ) {
+                    userQ = turn.parts[0].text;
+                }
+                appendUserBubble(userQ);
+            } else if (turn.role === 'model') {
+                const parsed = parseGeminiResponse(turn.parts[0].text);
+                appendAiBubble(parsed.conversational_answer, parsed, accumulatedReferences);
+            }
+        }
+    }
+
+    renderSidebar();
+}
+
+function resetAiChat() {
+    activeSessionId = null;
+    aiChatHistory = [];
+    accumulatedReferences = [];
+    
+    const messagesContainer = document.getElementById('ai-chat-messages');
+    if (messagesContainer) {
+        messagesContainer.innerHTML = '';
+        showWelcomeBubble();
+    }
+    renderSidebar();
+}
+
+function showWelcomeBubble() {
+    const messagesContainer = document.getElementById('ai-chat-messages');
+    if (!messagesContainer) return;
+    const welcome = document.createElement('div');
+    welcome.className = 'chat-bubble welcome-bubble';
+    welcome.innerHTML = `
+        <h3 style="margin-bottom: 0.4rem; color: var(--primary-hover); font-weight: 700; font-size: 1.05rem;">⚖️ AI採購法大律師</h3>
+        <p style="font-size: 0.88rem; line-height: 1.55; color: var(--text-secondary); margin: 0 0 0.8rem 0;">
+            您好！我是您的 AI 採購法律助手。我精通政府採購法、工程會主管行政函釋與裁判案例。
+            請在下方輸入您遇到的政府採購爭議或具體案情，我會為您進行深度合理性判定、勝率估算，並產出專業的分析意見書。
+        </p>
+        <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); text-align: left; margin-bottom: 0.5rem; border-top: 1px solid var(--border-color); padding-top: 0.5rem;">
+            💡 快速引導諮詢範本（點擊下方膠囊立即開始分析）：
+        </div>
+        <div class="quick-templates" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; width: 100%; margin-top: 0.25rem;">
+            <div class="template-capsule" data-query="投標文件漏蓋章被沒收押標金，機關追繳時效是多久？合理嗎？" style="padding: 0.5rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); text-align: left;" title="沒收押標金時效">
+                ⚖️ 沒收押標金時效
+            </div>
+            <div class="template-capsule" data-query="機關擬依採購法第101條刊登拒絕往來公報處分，該如何申訴救濟？時效是幾天？合理嗎？" style="padding: 0.5rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); text-align: left;" title="101條停權救濟">
+                🚫 101條停權救濟
+            </div>
+            <div class="template-capsule" data-query="機關辦理採購招標，任意採用限制性招照（採購法第22條），是否構成程序違法？" style="padding: 0.5rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); text-align: left;" title="限制性招標合法性">
+                🤝 限制性招標合法性
+            </div>
+            <div class="template-capsule" data-query="因工期延誤（非可歸責）被扣罰逾期違約金，可以主張減價收受或酌減違約金嗎？" style="padding: 0.5rem 0.6rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.78rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); text-align: left;" title="逾期違約金酌減">
+                ⏳ 逾期違約金酌減
+            </div>
+        </div>
+    `;
+    messagesContainer.appendChild(welcome);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // 綁定點擊膠囊自動填入並送出
+    const capsules = welcome.querySelectorAll('.template-capsule');
+    capsules.forEach(capsule => {
+        capsule.addEventListener('click', () => {
+            const query = capsule.getAttribute('data-query');
+            const chatInput = document.getElementById('ai-chat-input');
+            if (chatInput) {
+                chatInput.value = query;
+                handleAiChatSend();
+            }
+        });
+    });
+}
+
+function togglePinSession(id) {
+    const session = aiSessions.find(s => s.id === id);
+    if (session) {
+        session.isPinned = !session.isPinned;
+        localStorage.setItem('mol_procure_sessions', JSON.stringify(aiSessions));
+        renderSidebar();
+    }
+}
+
+function deleteSession(id) {
+    if (confirm('確定要刪除此對話紀錄嗎？')) {
+        aiSessions = aiSessions.filter(s => s.id !== id);
+        localStorage.setItem('mol_procure_sessions', JSON.stringify(aiSessions));
+        if (activeSessionId === id) {
+            resetAiChat();
+        } else {
+            renderSidebar();
+        }
+    }
+}
+
+function parseGeminiResponse(text) {
+    let cleanText = text.trim();
+    
+    // 清除 markdown json 區塊標示
+    if (cleanText.startsWith("```")) {
+        const lines = cleanText.split("\n");
+        if (lines[0].startsWith("```json") || lines[0].startsWith("```")) {
+            lines.shift();
+        } else {
+            lines.shift();
+        }
+        if (lines[lines.length - 1] === "```") {
+            lines.pop();
+        }
+        cleanText = lines.join("\n").trim();
+    }
+
+    try {
+        return JSON.parse(cleanText);
+    } catch (e) {
+        console.warn("JSON parsing failed. Attempting regex match...", e);
+        const regexMatch = cleanText.match(/\{[\s\S]*\}/);
+        if (regexMatch) {
+            try {
+                return JSON.parse(regexMatch[0]);
+            } catch (innerErr) {
+                console.error("Regex extracted string is also not valid JSON:", innerErr);
+            }
+        }
+        
+        return {
+            conversational_answer: "抱歉，法律研判模組回傳的數據格式有誤。但我可以告訴您：機關刊登公報停權或沒收押標金必須符合行政法比例原則及明確之可歸責要件。建議您檢視公文救濟期限並向相關主管機關提出異議。",
+            reasonability: "行為判定：AI回覆格式異常",
+            win_rate: "50%",
+            verdict_reason: "AI 回覆未符合 JSON 規範，以下為原始回覆節錄：\n" + text.substring(0, 150) + "...",
+            law_analysis: text,
+            action_suggestions: "請注意異議申訴時限（20天/15天內），並準備陳情或救濟文件。",
+            dos: ["核對函文到達時間", "儘速撰寫異議書狀"],
+            donts: ["勿放任時效逾期", "勿在狀況未明前同意私下和解"]
+        };
     }
 }
 
 // === 格式化 AI 聊天回覆 (簡單 Markdown/HTML 轉換) ===
 function formatChatReply(text) {
+    return parseMarkdownToHtml(text);
+}
+
+// === Markdown 升級表格、引用、標題編譯器 ===
+function parseMarkdownToHtml(text) {
     if (!text) return '';
     
-    // 移除開頭或結尾可能的 Markdown 程式碼區塊標記 (如 ```json 或 ``` )
     let cleaned = text.trim();
     cleaned = cleaned.replace(/^```[a-zA-Z0-9-]*\n/i, '');
     cleaned = cleaned.replace(/\n```$/i, '');
@@ -1456,26 +1806,207 @@ function formatChatReply(text) {
     cleaned = cleaned.replace(/```$/i, '');
     cleaned = cleaned.trim();
     
-    let html = escapeHtml(cleaned);
+    let lines = cleaned.split('\n');
+    let resultHtml = [];
+    let inTable = false;
+    let tableHeaders = null;
+    let tableRows = [];
+    let inQuote = false;
+    let quoteLines = [];
+    let inList = false;
+    let listHtml = [];
     
-    // 粗體轉換: **文字** -> <strong>文字</strong>
-    html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    
-    // 列表與段落轉換
-    html = html.split('\n').map(line => {
-        line = line.trim();
-        if (line.startsWith('* ') || line.startsWith('- ')) {
-            return `<li>${line.slice(2)}</li>`;
+    function closeQuote() {
+        if (inQuote) {
+            resultHtml.push('<blockquote>' + parseMarkdownToHtml(quoteLines.join('\n')) + '</blockquote>');
+            inQuote = false;
+            quoteLines = [];
         }
-        if (line.match(/^\d+\.\s/)) {
-            return `<li>${line.replace(/^\d+\.\s/, '')}</li>`;
+    }
+    
+    function closeList() {
+        if (inList) {
+            resultHtml.push('<ul>' + listHtml.join('\n') + '</ul>');
+            inList = false;
+            listHtml = [];
         }
-        if (line === '') return '';
-        return `<p>${line}</p>`;
-    }).join('\n');
+    }
     
-    // 合併鄰近的 <li>
-    html = html.replace(/(<li>.*?<\/li>\n?)+/g, match => `<ul>${match}</ul>`);
+    function closeTable() {
+        if (inTable) {
+            let tableHtml = '<div class="table-responsive"><table class="markdown-table">';
+            if (tableHeaders) {
+                tableHtml += '<thead><tr>';
+                tableHeaders.forEach(h => {
+                    tableHtml += '<th>' + parseInlineMarkdown(h.trim()) + '</th>';
+                });
+                tableHtml += '</tr></thead>';
+            }
+            tableHtml += '<tbody>';
+            tableRows.forEach(row => {
+                tableHtml += '<tr>';
+                row.forEach(cell => {
+                    tableHtml += '<td>' + parseInlineMarkdown(cell.trim()) + '</td>';
+                });
+                tableHtml += '</tr>';
+            });
+            tableHtml += '</tbody></table></div>';
+            resultHtml.push(tableHtml);
+            inTable = false;
+            tableHeaders = null;
+            tableRows = [];
+        }
+    }
     
-    return html;
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        let trimmed = line.trim();
+        
+        // 偵測 Markdown 表格行為
+        if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+            closeQuote();
+            closeList();
+            
+            let cols = trimmed.split('|').map(c => c.trim());
+            cols.shift();
+            cols.pop();
+            
+            let isSeparator = cols.every(c => c.match(/^:?-+:?$/));
+            
+            if (isSeparator) {
+                continue;
+            }
+            
+            if (!inTable) {
+                inTable = true;
+                tableHeaders = cols;
+            } else {
+                tableRows.push(cols);
+            }
+            continue;
+        } else {
+            closeTable();
+        }
+        
+        // 偵測引用區塊
+        if (trimmed.startsWith('>')) {
+            closeList();
+            inQuote = true;
+            let quoteText = line.substring(line.indexOf('>') + 1);
+            if (quoteText.startsWith(' ')) quoteText = quoteText.substring(1);
+            quoteLines.push(quoteText);
+            continue;
+        } else {
+            closeQuote();
+        }
+        
+        // 偵測三級標題
+        if (trimmed.startsWith('###')) {
+            closeList();
+            let hText = trimmed.substring(3).trim();
+            resultHtml.push('<h3>' + parseInlineMarkdown(hText) + '</h3>');
+            continue;
+        }
+        
+        // 偵測列表
+        if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+            inList = true;
+            let itemText = trimmed.substring(2).trim();
+            listHtml.push('<li>' + parseInlineMarkdown(itemText) + '</li>');
+            continue;
+        } else if (trimmed.match(/^\d+\.\s/)) {
+            inList = true;
+            let itemText = trimmed.replace(/^\d+\.\s/, '').trim();
+            listHtml.push('<li>' + parseInlineMarkdown(itemText) + '</li>');
+            continue;
+        } else {
+            closeList();
+        }
+        
+        if (trimmed === '') {
+            continue;
+        }
+        
+        resultHtml.push('<p>' + parseInlineMarkdown(trimmed) + '</p>');
+    }
+    
+    closeTable();
+    closeQuote();
+    closeList();
+    
+    return resultHtml.join('\n');
+}
+
+function parseInlineMarkdown(text) {
+    let escaped = escapeHtml(text);
+    escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    return escaped;
+}
+
+// === 匯出對話紀錄為 JSON 備份檔 ===
+function exportSessionsBackup() {
+    if (aiSessions.length === 0) {
+        alert('目前無歷史對話紀錄可供匯出！');
+        return;
+    }
+    try {
+        const dataStr = JSON.stringify(aiSessions, null, 2);
+        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+        
+        const exportFileDefaultName = `ai_procure_lawyer_backup_${new Date().toISOString().slice(0,10)}.json`;
+        
+        const linkElement = document.createElement('a');
+        linkElement.setAttribute('href', dataUri);
+        linkElement.setAttribute('download', exportFileDefaultName);
+        linkElement.click();
+    } catch (e) {
+        console.error('匯出失敗:', e);
+        alert('匯出失敗，請重試！');
+    }
+}
+
+// === 匯入 JSON 備份檔並合併對話紀錄 ===
+function importSessionsBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const importedData = JSON.parse(e.target.result);
+            if (!Array.isArray(importedData)) {
+                alert('匯入失敗：備份檔格式不正確，應為對話陣列。');
+                return;
+            }
+
+            let mergeCount = 0;
+            importedData.forEach(importedSession => {
+                if (importedSession.id) {
+                    const exists = aiSessions.some(s => s.id === importedSession.id);
+                    if (!exists) {
+                        aiSessions.push(importedSession);
+                        mergeCount++;
+                    }
+                }
+            });
+
+            if (mergeCount === 0) {
+                alert('無新增的對話紀錄（對話已存在於目前側邊欄中）。');
+            } else {
+                aiSessions.sort((a, b) => b.id.localeCompare(a.id));
+                localStorage.setItem('mol_procure_sessions', JSON.stringify(aiSessions));
+                renderSidebar();
+                if (aiSessions.length > 0) {
+                    loadSession(aiSessions[0].id);
+                }
+                alert(`成功匯入並合併 ${mergeCount} 筆對話紀錄！`);
+            }
+        } catch (err) {
+            console.error('讀取備份檔失敗:', err);
+            alert('匯入失敗：無法解析 JSON 檔案。');
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsText(file);
 }
