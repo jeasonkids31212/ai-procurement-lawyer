@@ -1,4 +1,4 @@
-﻿﻿﻿﻿/**
+/**
  * 政府採購法 AI 法律智慧檢索系統 - 前端核心邏輯
  * 
  * 採用分塊非同步背景載入 (Chunk Lazy Loading) 技術與 RAG AI 律師諮詢引擎
@@ -725,10 +725,8 @@ function formatAndHighlightContent(rawContent, keyword) {
     if (!rawContent) return '無內容';
     let formatted = escapeHtml(rawContent);
     formatted = formatted
-        .replace(/(說明：)/g, '
-$1')
-        .replace(/(一、|二、|三、|四、|五、|六、|七、|八、|九、|十、)/g, '
-$1');
+        .replace(/(說明：)/g, '\n$1')
+        .replace(/(一、|二、|三、|四、|五、|六、|七、|八、|九、|十、)/g, '\n$1');
         
     if (keyword) {
         formatted = highlightKeyword(formatted, keyword);
@@ -855,11 +853,11 @@ function localSemanticParse(question) {
         if (artNum) {
             const num = parseInt(artNum[0], 10);
             if (num === 22) {
-                lawAnalysisText += '
+                lawAnalysisText += `
 
 工程會指出，採購法第 22 條第 1 項各款為限制性招標之法定適用事由，機關應從嚴審查其規格或獨家供應之必要性，不得任意變更招標方式。
 
-司法裁判指出，若機關違反採購法第 22 條規定進行限制性招標，可能構成程序瑕疵而影響決標契約之效力，未得標廠商得依法提出救濟。';
+司法裁判指出，若機關違反採購法第 22 條規定進行限制性招標，可能構成程序瑕疵而影響決標契約之效力，未得標廠商得依法提出救濟。`;
                 actionSuggestionsText = '如您是利害關係廠商，建議儘速對機關之限制性招標公告提出書面異議。如屬後續擴充案件，請確認招標文件是否預先載明擴充上限。';
                 reasonabilityText = '行為判定：限制性招標需有法定事由，否則即屬違法（政府採購法第22條）';
                 winRateText = '60%';
@@ -867,11 +865,11 @@ function localSemanticParse(question) {
                 dos.push('確認招標公告是否敘明後續擴充之期間、金額或數量。');
                 donts.push('避免在無防禦性之限制性招標決標後才提出爭議，應在招標等標期內提出異議。');
             } else if (num === 101) {
-                lawAnalysisText += '
+                lawAnalysisText += `
 
 工程會規定，機關依第 101 條通知將廠商刊登拒絕往來政府公報前，應給予廠商書面陳述意見之機會，且須符合比例原則。
 
-最高行政法院見解強調，101 條刊登公報屬公法處分，需嚴格審查廠商是否符合可歸責之惡意要件（非可歸責或輕微違約不得停權）。';
+最高行政法院見解強調，101 條刊登公報屬公法處分，需嚴格審查廠商是否符合可歸責之惡意要件（非可歸責或輕微違約不得停權）。`;
                 actionSuggestionsText = '收到 101 條通知函時，必須在「20 日內」提出書面異議。若機關維持原決定，應在「15 日內」向申訴會提出申訴，並聲請假處分暫緩刊登。';
                 reasonabilityText = '行為判定：擬刊登公報停權處分可能違反比例原則（政府採購法第101條）';
                 winRateText = '85%';
@@ -880,11 +878,11 @@ function localSemanticParse(question) {
                 dos.push('向行政法院聲請停止執行（假處分），避免在判決確定前被先行刊登公報停權。');
                 donts.push('切勿忽視機關的 101 條通知公文，逾期未提出異議將導致直接刊登公報停權 1 至 3 年。');
             } else if (num === 31) {
-                lawAnalysisText += '
+                lawAnalysisText += `
 
 工程會 108 年修法後，關於第 31 條第 2 項追繳押標金之處分，應從寬審查廠商是否有串通投標或影響採購公正之惡意意圖。
 
-最高行政法院判決見解：追繳押標金屬於公法處分，時效適用行政程序法第 131 條之 5 年公法請求權時效，逾期機關不得追繳。';
+最高行政法院判決見解：追繳押標金屬於公法處分，時效適用行政程序法第 131 條之 5 年公法請求權時效，逾期機關不得追繳。`;
                 actionSuggestionsText = '請核對機關通知追繳押標金之日期，是否已超過行為發生日起算之 5 年時效。若有程序爭議，應於 15 日內提出異議申訴救濟。';
                 reasonabilityText = '行為判定：沒收或追繳押標金需視是否有惡意不法意圖（政府採購法第31條）';
                 winRateText = '75%';
@@ -892,11 +890,11 @@ function localSemanticParse(question) {
                 dos.push('確認機關追繳時，是否已超過行為發生日起算之 5 年公法時效。');
                 donts.push('避免任意配合其他廠商借牌投標，這將構成採購法 31 條沒收押標金並伴隨刑事責任。');
             } else if (num === 63) {
-                lawAnalysisText += '
+                lawAnalysisText += `
 
 工程會依第 63 條訂定各式採購契約範本，機關辦理採購應以採用範本為原則，不可任意加重廠商之不合理責任。
 
-民事法院審理採購契約爭議時，常參酌工程會契約範本之物價指數調整、違約金比例等，作為衡量契約公平合理與情事變更之判斷標準。';
+民事法院審理採購契約爭議時，常參酌工程會契約範本之物價指數調整、違約金比例等，作為衡量契約公平合理與情事變更之判斷標準。`;
                 actionSuggestionsText = '建議詳細檢視當個案合約是否有違背工程會範本之顯失公平條款，並依法主張合約合理變更或酌減違約金。';
                 reasonabilityText = '行為判定：契約條款涉顯失公平或違約金過高（政府採購法第63條）';
                 winRateText = '70%';
@@ -968,7 +966,7 @@ function localSemanticParse(question) {
 
 // === 呼叫 Google Gemini API 進行語意分析與對話 ===
 async function callGeminiAPI(contentsArray) {
-    const models = ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
+    const models = ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
     
     if (!geminiApiKey) {
         throw new Error('未設定 Gemini API 金鑰，請先在設定中配置。');
@@ -1672,8 +1670,7 @@ function loadSession(id) {
                         if (lines[j].trim().startsWith('請開始法律分析') || lines[j].trim().startsWith('請結合先前的對話')) {
                             break;
                         }
-                        userQ += lines[j] + '
-';
+                        userQ += lines[j] + '\n';
                     }
                 }
                 userQ = userQ.trim();
@@ -1805,8 +1802,7 @@ function parseGeminiResponse(text) {
             conversational_answer: "抱歉，法律研判模組回傳的數據格式有誤。但我可以告訴您：機關刊登公報停權或沒收押標金必須符合行政法比例原則及明確之可歸責要件。建議您檢視公文救濟期限並向相關主管機關提出異議。",
             reasonability: "行為判定：AI回覆格式異常",
             win_rate: "50%",
-            verdict_reason: "AI 回覆未符合 JSON 規範，以下為原始回覆節錄:
-" + text.substring(0, 150) + "...",
+            verdict_reason: "AI 回覆未符合 JSON 規範，以下為原始回覆節錄:\n" + text.substring(0, 150) + "...",
             law_analysis: text,
             action_suggestions: "請注意異議申訴時限（20天/15天內），並準備陳情或救濟文件。",
             dos: ["核對函文到達時間", "儘速撰寫異議書狀"],
