@@ -967,15 +967,11 @@ function localSemanticParse(question) {
 
 // === 呼叫 Google Gemini API 進行語意分析與對話 ===
 async function callGeminiAPI(contentsArray) {
-    const models = ['gemini-2.5-flash'];
-    const requestTimeoutMs = 12000;
+    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    const requestTimeoutMs = 15000;
     
     if (!geminiApiKey) {
         throw new Error('未設定 Gemini API 金鑰，請先在設定中配置。');
-    }
-
-    if (window.location.protocol === 'file:') {
-        throw new Error('目前是以本機 file:// 方式開啟頁面，Gemini API 金鑰常會因來源限制而無法使用；請改用 GitHub Pages 或 localhost 測試。');
     }
 
     const requestBody = {
@@ -1016,6 +1012,7 @@ async function callGeminiAPI(contentsArray) {
                 throw new Error(`${modelName} 失敗: AI 未回傳有效內容`);
             }
 
+            clearTimeout(timeoutId);
             return { model: modelName, text: resultText };
 
         } catch (err) {
@@ -1497,7 +1494,6 @@ async function handleAiChatSend() {
         <span class="loading-dot"></span>
         <span class="loading-dot"></span>
         <span class="loading-dot"></span>
-        <span style="margin-left: 0.5rem; font-size: 0.82rem; color: #64748b;">Gemini 連線中，最多等待 12 秒...</span>
     `;
     messagesContainer.appendChild(loadingBubble);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -1575,16 +1571,13 @@ async function handleAiChatSend() {
             messagesContainer.removeChild(loadingBubble);
         }
 
-        const fallbackResult = localSemanticParse(effectiveQuestion);
-        fallbackResult.conversational_answer = `Gemini 連線暫時沒有回應，我先用本機法規資料庫為您做初步研判：\n\n${fallbackResult.conversational_answer}`;
-        fallbackResult.verdict_reason = `Gemini API 未完成回應（${err.message}），已改用本機解析結果。`;
-        appendAiBubble(fallbackResult.conversational_answer, fallbackResult, turnRefs);
+        const errorBubble = document.createElement('div');
+        errorBubble.className = 'chat-bubble ai-bubble';
+        errorBubble.style.borderColor = '#ef4444';
+        errorBubble.innerHTML = `<span style="color: #ef4444; font-weight: bold;">⚠️ 研判失敗：</span>${escapeHtml(err.message)}`;
+        messagesContainer.appendChild(errorBubble);
 
         aiChatHistory.pop();
-        aiChatHistory.push({ role: 'user', parts: [{ text: effectiveQuestion }] });
-        aiChatHistory.push({ role: 'model', parts: [{ text: JSON.stringify(fallbackResult) }] });
-        saveCurrentSession();
-        renderSidebar();
     } finally {
         chatInput.disabled = false;
         if (sendBtn) sendBtn.disabled = false;

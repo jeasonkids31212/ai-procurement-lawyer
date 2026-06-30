@@ -364,12 +364,207 @@
                 </p>
             </div>
             <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+                                <input type="text" id="search-judgment-content" placeholder="請輸入判決精簡理由關鍵字，例如：押標金、連帶負責">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" id="btn-judgments-reset" class="btn btn-secondary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                            重設條件
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            開始查詢
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tab 3: AI Lawyer Search Container (hidden by default) -->
+            <div id="ai-lawyer-search-container" class="search-container d-none">
+                <div class="ai-workspace">
+                    <!-- Left Sidebar for Sessions -->
+                    <aside class="ai-sidebar" id="ai-sidebar">
+                        <button type="button" id="ai-new-chat-btn" class="btn-new-chat">
+                            <span>➕ 新建對話</span>
+                        </button>
+                        
+                        <!-- Pinned Chats Section -->
+                        <div class="sidebar-section">
+                            <div class="sidebar-section-title">📌 已釘選對話</div>
+                            <div id="ai-pinned-chats-list" class="sidebar-list">
+                                <div class="empty-list-text">無釘選對話</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Recent Chats Section -->
+                        <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
+                            <div class="sidebar-section-title">💬 歷史對話</div>
+                            <div id="ai-recent-chats-list" class="sidebar-list" style="flex: 1; overflow-y: auto;">
+                                <div class="empty-list-text">無歷史對話</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Backup Actions Section -->
+                        <div class="sidebar-backup-actions" style="margin-top: auto; padding-top: 0.75rem; border-top: 1px solid var(--border-color); display: flex; gap: 0.5rem; flex-shrink: 0;">
+                            <button type="button" id="ai-export-btn" class="btn-backup" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0.5rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth);" title="匯出對話紀錄為 JSON 備份檔">
+                                📥 匯出紀錄
+                            </button>
+                            <button type="button" id="ai-import-btn" class="btn-backup" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.35rem; padding: 0.5rem; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth);" title="匯入先前下載的 JSON 備份檔">
+                                📤 匯入紀錄
+                            </button>
+                            <input type="file" id="ai-import-file-input" accept=".json" style="display: none;" />
+                        </div>
+                    </aside>
+
+                    <!-- Right Chat Area -->
+                    <div class="ai-chat-area">
+                        <!-- Chat Header -->
+                        <div class="chat-area-header">
+                            <h3 style="margin-bottom: 0; border-bottom: none; padding-bottom: 0; display: flex; align-items: center; gap: 0.5rem;">
+                                <button type="button" id="ai-sidebar-toggle" style="padding: 0.2rem; background: transparent; border: none; color: var(--accent-gold); cursor: pointer; display: flex; align-items: center;" title="收合/展開側邊欄">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                                </button>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-gold);"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                AI 【採購爭議】王牌大律師 線上對答諮詢
+                            </h3>
+                            <button type="button" id="ai-header-reset-btn" class="sidebar-action-btn" style="padding: 0.4rem 0.8rem; font-size: 0.82rem; border-radius: 8px; display: flex; align-items: center; gap: 0.3rem; border: 1px solid var(--border-color); color: var(--text-secondary); background: transparent; cursor: pointer; font-family: inherit;" title="重置並開啟新對話">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.64A9 9 0 0 0 20.49 15"/></svg>
+                                <span>新諮詢</span>
+                            </button>
+                        </div>
+
+                        <!-- Chat Message History -->
+                        <div class="ai-chat-messages" id="ai-chat-messages">
+                            <!-- Welcome bubble when no history -->
+                            <div class="chat-bubble welcome-bubble">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                                    <div style="background: linear-gradient(135deg, var(--accent-gold), hsl(35, 90%, 50%)); color: #0b0f19; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem;">律</div>
+                                    <span style="font-weight: 700; font-size: 0.95rem; color: var(--accent-gold);">AI 王牌大律師</span>
+                                </div>
+                                <p style="font-size: 0.88rem; line-height: 1.6; color: var(--text-secondary); margin: 0 0 1rem 0;">
+                                    您好！我是您的 **AI 採購法王牌大律師**。不論您遇到了政府採購的招標、審標、決標爭議，或是沒收押標金、101條刊登公報停權處分、逾期違約金扣罰扣款等實務問題，我都可以為您提供專業的法律合理性研判、法條爭點分析與具體救濟行動建議。
+                                </p>
+                                <p style="font-size: 0.88rem; line-height: 1.6; color: var(--text-secondary); margin: 0 0 1rem 0;">
+                                    請在下方輸入您的案情或提問開始諮詢！我會結合本機庫中最新的採購法規與行政函釋進行答覆。在每輪答覆中，您可以點擊 **「展開本輪 AI 核心研判報告」** 查看詳細分析與行動紅綠線燈指引。
+                                </p>
+                                
+                                <div class="quick-templates" style="display: flex; flex-wrap: wrap; gap: 0.5rem; width: 100%; margin-top: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+                                    <button class="template-capsule" data-query="投標文件漏蓋章被沒收押標金，機關追繳時效是多久？合理嗎？" style="background: hsla(215, 25%, 38%, 0.12); border: 1px solid var(--border-color); border-radius: 20px; padding: 0.45rem 0.9rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); font-family: inherit;" onmouseover="this.style.borderColor='var(--accent-gold)'; this.style.color='var(--text-primary)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)'">⚖️ 沒收押標金時效</button>
+                                    <button class="template-capsule" data-query="機關擬依採購法第101條刊登拒絕往來公報處分，該如何申訴救濟？時效是幾天？" style="background: hsla(215, 25%, 38%, 0.12); border: 1px solid var(--border-color); border-radius: 20px; padding: 0.45rem 0.9rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); font-family: inherit;" onmouseover="this.style.borderColor='var(--accent-gold)'; this.style.color='var(--text-primary)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)'">🚫 101條停權救濟</button>
+                                    <button class="template-capsule" data-query="機關辦理採購招標，任意採用限制性招標（採購法第22條），是否合理？" style="background: hsla(215, 25%, 38%, 0.12); border: 1px solid var(--border-color); border-radius: 20px; padding: 0.45rem 0.9rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); font-family: inherit;" onmouseover="this.style.borderColor='var(--accent-gold)'; this.style.color='var(--text-primary)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)'">🤝 限制性招標合法性</button>
+                                    <button class="template-capsule" data-query="因工期延誤（非可歸責）被扣罰逾期違約金，可以主張減價收受或酌減違約金嗎？" style="background: hsla(215, 25%, 38%, 0.12); border: 1px solid var(--border-color); border-radius: 20px; padding: 0.45rem 0.9rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; transition: var(--transition-smooth); font-family: inherit;" onmouseover="this.style.borderColor='var(--accent-gold)'; this.style.color='var(--text-primary)'" onmouseout="this.style.borderColor='var(--border-color)'; this.style.color='var(--text-secondary)'">⏳ 逾期違約金酌減</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chat Input Panel -->
+                        <div class="ai-chat-input-panel">
+                            <div id="ai-attachment-list" class="ai-attachment-list" aria-live="polite"></div>
+                            <div class="chat-input-wrapper">
+                                <input type="file" id="ai-file-input" multiple accept=".txt,.md,.csv,.json,.html,.htm,.js,.css,.pdf,.doc,.docx,image/*" hidden>
+                                <button type="button" id="ai-file-upload-btn" class="attach-btn" title="上傳檔案或資料夾內容">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                                </button>
+                                <textarea id="ai-chat-input" rows="1" placeholder="請輸入您遇到的採購法爭議問題或具體案情... (例如：公司被機關以漏蓋章沒收押標金，是否合法？)"></textarea>
+                                <div class="input-actions">
+                                    <button type="button" id="ai-chat-voice-btn" class="voice-btn" title="語音輸入 (講完自動傳送)">
+                                        <svg class="mic-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                                    </button>
+                                    <button type="button" id="ai-chat-send-btn" class="send-btn" title="傳送對話">
+                                        送出問題 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; padding: 0 0.25rem;">
+                                <div id="ai-db-status" style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--text-secondary);">
+                                    <span class="status-dot active" style="width: 6px; height: 6px; border-radius: 50%; background-color: var(--accent-success); display: inline-block;"></span>
+                                    <span>系統就緒 (已載入 3650 筆法令參考資料)</span>
+                                </div>
+                                <span style="font-size: 0.72rem; color: var(--text-muted);">* 支援 Shift+Enter 換行，直接發送請按 Enter</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Search Results Section -->
+        <section class="results-section">
+            <!-- AI Answer Summary Card Container -->
+            <div id="ai-guide-container"></div>
+
+            <div class="results-header">
+                <div class="results-stats">
+                    <span id="results-count" class="badge">共 3650 筆資料</span>
+                    <span id="filter-status" class="filter-status-text">顯示全部</span>
+                </div>
+                
+                <div class="results-per-page">
+                    <label for="per-page-select">每頁顯示</label>
+                    <select id="per-page-select" class="custom-select">
+                        <option value="10">10 筆</option>
+                        <option value="20" selected>20 筆</option>
+                        <option value="50">50 筆</option>
+                        <option value="100">100 筆</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Main Results List (Cards/Accordion) -->
+            <div id="results-container" class="results-container">
+                <!-- Loaded dynamically by app.js -->
+                <div class="skeleton-loader">
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                    <div class="skeleton-card"></div>
+                </div>
+            </div>
+
+            <!-- Pagination Control -->
+            <div id="pagination-container" class="pagination-container">
+                <!-- Loaded dynamically by app.js -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="main-footer">
+        <div class="container footer-content">
+            <p>政府採購法函釋檢索系統 &copy; 2026. 建置於 GitHub Pages 靜態架構下。</p>
+            <p class="secondary-text">資料來源：行政院公共工程委員會主管法規解釋令。資料發布日期：民國 115 年 6 月 3 日。</p>
+        </div>
+    </footer>
+
+    <!-- API Key Config Modal -->
+    <div id="api-modal" class="modal-overlay">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h3>設定 Gemini API 金鑰</h3>
+                <button id="modal-close" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>本功能使用 Google Gemini 進行語意分析與關鍵字提取，金鑰將直接發送至 Google 伺服器，安全且免費。</p>
+                <div class="form-group" style="margin-top: 1rem; margin-bottom: 0.5rem;">
+                    <label for="api-key-input">Gemini API 金鑰 (API Key)</label>
+                    <div class="input-wrapper">
+                        <input type="password" id="api-key-input" placeholder="請貼上您的 AIzaSy... 金鑰">
+                    </div>
+                </div>
+                <p class="help-text" style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+                    金鑰僅儲存於您個人的瀏覽器中，絕不傳送到第三方。
+                    <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style="color: var(--primary-hover); text-decoration: underline;">點此前往 Google AI Studio 免費申請金鑰</a>
+                </p>
+            </div>
+            <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
                 <button id="btn-save-key" class="btn btn-primary">儲存設定</button>
             </div>
         </div>
     </div>
 
     <!-- JS Logic -->
-    <script src="app.js?v=2.9"></script>
+    <script src="app.js?v=6.0"></script>
 </body>
 </html>
