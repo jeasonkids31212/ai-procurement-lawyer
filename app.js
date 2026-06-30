@@ -1,4 +1,4 @@
-﻿﻿/**
+﻿﻿﻿﻿/**
  * 政府採購法 AI 法律智慧檢索系統 - 前端核心邏輯
  * 
  * 採用分塊非同步背景載入 (Chunk Lazy Loading) 技術與 RAG AI 律師諮詢引擎
@@ -1028,9 +1028,7 @@ function buildRagPrompt(question, retrievedRulings, retrievedJudgments, isFollow
 主題：${r.主題}
 內容：${(r.內容 || '').slice(0, 600)}...
 連結：${r.連結網址}`
-    ).join('
-
-');
+    ).join('\n');
 
     const judgmentsCtx = retrievedJudgments.slice(0, 2).map((j, i) => 
         `【法院判決 ${i+1}】
@@ -1039,9 +1037,7 @@ function buildRagPrompt(question, retrievedRulings, retrievedJudgments, isFollow
 主文：${j.裁判主文}
 內容：${(j.內容 || '').slice(0, 600)}...
 連結：${j.連結網址}`
-    ).join('
-
-');
+    ).join('\n');
 
     const systemInstruction = 
         `你是一位精通中華民國政府採購法的資深大律師，精通政府採購法、行政院公共工程委員會主管行政函釋與民刑事裁判書。
@@ -1665,8 +1661,7 @@ function loadSession(id) {
             const turn = aiChatHistory[i];
             if (turn.role === 'user') {
                 let userQ = '';
-                const lines = turn.parts[0].text.split('
-');
+                const lines = turn.parts[0].text.split('\n');
                 let startExtract = false;
                 for (let j = 0; j < lines.length; j++) {
                     if (lines[j].includes('【使用者諮詢問題】：') || lines[j].includes('【使用者追問】：')) {
@@ -1781,8 +1776,7 @@ function parseGeminiResponse(text) {
     
     // 清除 markdown json 區塊標示
     if (cleanText.startsWith("```")) {
-        const lines = cleanText.split("
-");
+        const lines = cleanText.split("\n");
         if (lines[0].startsWith("```json") || lines[0].startsWith("```")) {
             lines.shift();
         } else {
@@ -1791,8 +1785,7 @@ function parseGeminiResponse(text) {
         if (lines[lines.length - 1] === "```") {
             lines.pop();
         }
-        cleanText = lines.join("
-").trim();
+        cleanText = lines.join("\n").trim();
     }
 
     try {
@@ -1812,7 +1805,7 @@ function parseGeminiResponse(text) {
             conversational_answer: "抱歉，法律研判模組回傳的數據格式有誤。但我可以告訴您：機關刊登公報停權或沒收押標金必須符合行政法比例原則及明確之可歸責要件。建議您檢視公文救濟期限並向相關主管機關提出異議。",
             reasonability: "行為判定：AI回覆格式異常",
             win_rate: "50%",
-            verdict_reason: "AI 回覆未符合 JSON 規範，以下為原始回覆節錄：
+            verdict_reason: "AI 回覆未符合 JSON 規範，以下為原始回覆節錄:
 " + text.substring(0, 150) + "...",
             law_analysis: text,
             action_suggestions: "請注意異議申訴時限（20天/15天內），並準備陳情或救濟文件。",
@@ -1832,16 +1825,13 @@ function parseMarkdownToHtml(text) {
     if (!text) return '';
     
     let cleaned = text.trim();
-    cleaned = cleaned.replace(/^```[a-zA-Z0-9-]*
-/i, '');
-    cleaned = cleaned.replace(/
-```$/i, '');
+    cleaned = cleaned.replace(/^```[a-zA-Z0-9-]*\n/i, '');
+    cleaned = cleaned.replace(/\n```$/i, '');
     cleaned = cleaned.replace(/^```/i, '');
     cleaned = cleaned.replace(/```$/i, '');
     cleaned = cleaned.trim();
     
-    let lines = cleaned.split('
-');
+    let lines = cleaned.split('\n');
     let resultHtml = [];
     let inTable = false;
     let tableHeaders = null;
@@ -1853,8 +1843,7 @@ function parseMarkdownToHtml(text) {
     
     function closeQuote() {
         if (inQuote) {
-            resultHtml.push('<blockquote>' + parseMarkdownToHtml(quoteLines.join('
-')) + '</blockquote>');
+            resultHtml.push('<blockquote>' + parseMarkdownToHtml(quoteLines.join('\n')) + '</blockquote>');
             inQuote = false;
             quoteLines = [];
         }
@@ -1862,8 +1851,7 @@ function parseMarkdownToHtml(text) {
     
     function closeList() {
         if (inList) {
-            resultHtml.push('<ul>' + listHtml.join('
-') + '</ul>');
+            resultHtml.push('<ul>' + listHtml.join('\n') + '</ul>');
             inList = false;
             listHtml = [];
         }
@@ -1971,8 +1959,7 @@ function parseMarkdownToHtml(text) {
     closeQuote();
     closeList();
     
-    return resultHtml.join('
-');
+    return resultHtml.join('\n');
 }
 
 function parseInlineMarkdown(text) {
