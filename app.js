@@ -967,11 +967,15 @@ function localSemanticParse(question) {
 
 // === 呼叫 Google Gemini API 進行語意分析與對話 ===
 async function callGeminiAPI(contentsArray) {
-    const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest'];
-    const requestTimeoutMs = 20000;
+    const models = ['gemini-2.5-flash'];
+    const requestTimeoutMs = 12000;
     
     if (!geminiApiKey) {
         throw new Error('未設定 Gemini API 金鑰，請先在設定中配置。');
+    }
+
+    if (window.location.protocol === 'file:') {
+        throw new Error('目前是以本機 file:// 方式開啟頁面，Gemini API 金鑰常會因來源限制而無法使用；請改用 GitHub Pages 或 localhost 測試。');
     }
 
     const requestBody = {
@@ -1493,6 +1497,7 @@ async function handleAiChatSend() {
         <span class="loading-dot"></span>
         <span class="loading-dot"></span>
         <span class="loading-dot"></span>
+        <span style="margin-left: 0.5rem; font-size: 0.82rem; color: #64748b;">Gemini 連線中，最多等待 12 秒...</span>
     `;
     messagesContainer.appendChild(loadingBubble);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
