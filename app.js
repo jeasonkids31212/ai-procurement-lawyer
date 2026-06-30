@@ -164,6 +164,9 @@ function setupEventListeners() {
     apiKeyConfigBtn.addEventListener('click', openApiModal);
     modalClose.addEventListener('click', closeApiModal);
     btnSaveKey.addEventListener('click', saveApiKey);
+    apiKeyInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveApiKey();
+    });
     
     // 點擊 Modal 外部也可關閉
     apiModal.addEventListener('click', (e) => {
@@ -1452,7 +1455,29 @@ function stopRecording() {
     }
 }
 
-// === 處理發送對話與 RAG/Gemini 呼叫 ===
+// === 處理送出與 RAG/Gemini 呼叫 ===
+
+// 簡單的關鍵字檢索，供 RAG 使用
+function localRAGRetrieve(question) {
+    if (!question) return { rulings: [], judgments: [] };
+    const keywords = question.toLowerCase().split(/[\s,，、]+/).filter(Boolean);
+    
+    const rulingsPool = (allRulingsData && allRulingsData.length > 0) ? allRulingsData : (allData || []);
+    const matchedRulings = rulingsPool.filter(item => {
+        if (!item) return false;
+        const text = ((item.主題 || '') + (item.相關內容 || '') + (item.依據採購法條文 || '')).toLowerCase();
+        return keywords.some(kw => text.includes(kw));
+    }).slice(0, 5);
+    
+    const matchedJudgments = (allJudgmentsData || []).filter(item => {
+        if (!item) return false;
+        const text = ((item.裁判主文 || '') + (item.內容 || '') + (item.依據採購法條文 || '')).toLowerCase();
+        return keywords.some(kw => text.includes(kw));
+    }).slice(0, 3);
+    
+    return { rulings: matchedRulings, judgments: matchedJudgments };
+}
+
 async function handleAiChatSend() {
     const chatInput = document.getElementById('ai-chat-input');
     const messagesContainer = document.getElementById('ai-chat-messages');
