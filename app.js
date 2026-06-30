@@ -970,7 +970,7 @@ function localSemanticParse(question) {
 
 // === 呼叫 Google Gemini API 進行語意分析與對話 ===
 async function callGeminiAPI(contentsArray) {
-    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+    const models = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-pro'];
     const requestTimeoutMs = 15000;
     
     if (!geminiApiKey) {
