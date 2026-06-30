@@ -970,8 +970,8 @@ function localSemanticParse(question) {
 
 // === 呼叫 Google Gemini API 進行語意分析與對話 ===
 async function callGeminiAPI(contentsArray) {
-    const models = ['gemini-1.5-flash-latest', 'gemini-1.5-pro-latest', 'gemini-pro'];
-    const requestTimeoutMs = 15000;
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
+    const requestTimeoutMs = 30000;
     
     if (!geminiApiKey) {
         throw new Error('未設定 Gemini API 金鑰，請先在設定中配置。');
