@@ -33,6 +33,7 @@ let geminiApiKey = localStorage.getItem('gemini_api_key') || '';
 let aiChatHistory = [];       // 儲存對話歷程 (符合 Gemini API contents 規範)
 let lastRetrievedDocs = null;  // 快取前次檢索結果
 let lastAiPromptText = '';    // 快取前次產生的 RAG prompt 文字
+let aiAttachments = [];        // 本輪 AI 諮詢附加檔案
 
 // 搜尋條件快取
 const searchCriteria = {
@@ -966,7 +967,8 @@ function localSemanticParse(question) {
 
 // === 呼叫 Google Gemini API 進行語意分析與對話 ===
 async function callGeminiAPI(contentsArray) {
-    const models = ['gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+    const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest'];
+    const requestTimeoutMs = 20000;
     
     if (!geminiApiKey) {
         throw new Error('未設定 Gemini API 金鑰，請先在設定中配置。');
@@ -983,6 +985,8 @@ async function callGeminiAPI(contentsArray) {
     let lastError = null;
 
     for (const modelName of models) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
         try {
             console.log(`[Gemini API] 正在嘗試呼叫模型: ${modelName}...`);
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${geminiApiKey}`;
@@ -992,6 +996,7 @@ async function callGeminiAPI(contentsArray) {
                 headers: {
                     'Content-Type': 'application/json'
                 },
+                signal: controller.signal,
                 body: JSON.stringify(requestBody)
             });
 
@@ -1010,8 +1015,13 @@ async function callGeminiAPI(contentsArray) {
             return { model: modelName, text: resultText };
 
         } catch (err) {
-            console.warn(`[Gemini API] 模型 ${modelName} 異常，準備嘗試備用模型。原因:`, err.message);
-            lastError = err;
+            const message = err.name === 'AbortError'
+                ? `${modelName} 連線逾時（超過 ${Math.round(requestTimeoutMs / 1000)} 秒）`
+                : err.message;
+            console.warn(`[Gemini API] 模型 ${modelName} 異常，準備嘗試備用模型。原因:`, message);
+            lastError = new Error(message);
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
 
@@ -1109,6 +1119,8 @@ function initAiWorkspace() {
     const sendBtn = document.getElementById('ai-chat-send-btn');
     const voiceBtn = document.getElementById('ai-chat-voice-btn');
     const chatInput = document.getElementById('ai-chat-input');
+    const fileUploadBtn = document.getElementById('ai-file-upload-btn');
+    const fileInput = document.getElementById('ai-file-input');
 
     // 側邊欄收合按鈕 (支援行動裝置預設收合)
     if (toggleBtn && sidebar) {
@@ -1141,6 +1153,11 @@ function initAiWorkspace() {
     // 傳送按鈕
     if (sendBtn) {
         sendBtn.addEventListener('click', handleAiChatSend);
+    }
+
+    if (fileUploadBtn && fileInput) {
+        fileUploadBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleAiFileSelect);
     }
 
     // 輸入框按 Enter 鍵傳送 (Shift+Enter 換行)
@@ -1181,6 +1198,165 @@ function initAiWorkspace() {
     } else {
         resetAiChat();
     }
+}
+
+// === AI 諮詢附件處理 ===
+const TEXT_ATTACHMENT_EXTENSIONS = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'js', 'css'];
+const MAX_AI_ATTACHMENT_FILES = 6;
+const MAX_AI_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+const MAX_TEXT_ATTACHMENT_CHARS = 18000;
+
+function isTextAttachment(file) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    return file.type.startsWith('text/') ||
+        file.type === 'application/json' ||
+        TEXT_ATTACHMENT_EXTENSIONS.includes(ext);
+}
+
+function formatFileSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('檔案讀取失敗'));
+        reader.readAsText(file, 'utf-8');
+    });
+}
+
+function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = String(reader.result || '');
+            resolve(result.includes(',') ? result.split(',')[1] : result);
+        };
+        reader.onerror = () => reject(reader.error || new Error('檔案讀取失敗'));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function handleAiFileSelect(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    const rejected = [];
+    for (const file of files) {
+        if (aiAttachments.length >= MAX_AI_ATTACHMENT_FILES) {
+            rejected.push(`${file.name}（超過 ${MAX_AI_ATTACHMENT_FILES} 個檔案上限）`);
+            continue;
+        }
+        if (file.size > MAX_AI_ATTACHMENT_BYTES) {
+            rejected.push(`${file.name}（超過 ${formatFileSize(MAX_AI_ATTACHMENT_BYTES)}）`);
+            continue;
+        }
+
+        try {
+            const attachment = {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+                name: file.name,
+                size: file.size,
+                type: file.type || inferMimeType(file.name),
+                isText: isTextAttachment(file),
+                text: '',
+                base64: ''
+            };
+
+            if (attachment.isText) {
+                const text = await readFileAsText(file);
+                attachment.text = text.slice(0, MAX_TEXT_ATTACHMENT_CHARS);
+                attachment.truncated = text.length > MAX_TEXT_ATTACHMENT_CHARS;
+            } else {
+                attachment.base64 = await readFileAsBase64(file);
+            }
+
+            aiAttachments.push(attachment);
+        } catch (err) {
+            rejected.push(`${file.name}（${err.message || '讀取失敗'}）`);
+        }
+    }
+
+    event.target.value = '';
+    renderAiAttachments();
+
+    if (rejected.length) {
+        alert(`下列檔案未加入：\n${rejected.join('\n')}`);
+    }
+}
+
+function inferMimeType(fileName) {
+    const ext = (fileName.split('.').pop() || '').toLowerCase();
+    const map = {
+        pdf: 'application/pdf',
+        doc: 'application/msword',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        webp: 'image/webp',
+        gif: 'image/gif'
+    };
+    return map[ext] || 'application/octet-stream';
+}
+
+function renderAiAttachments() {
+    const list = document.getElementById('ai-attachment-list');
+    if (!list) return;
+
+    list.innerHTML = aiAttachments.map(item => `
+        <span class="ai-attachment-chip" title="${escapeHtml(item.name)}">
+            <span>📎</span>
+            <span class="attachment-name">${escapeHtml(item.name)}</span>
+            <span class="attachment-size">${formatFileSize(item.size)}</span>
+            <button type="button" class="attachment-remove" data-id="${item.id}" aria-label="移除 ${escapeHtml(item.name)}">×</button>
+        </span>
+    `).join('');
+
+    list.querySelectorAll('.attachment-remove').forEach(btn => {
+        btn.addEventListener('click', () => {
+            aiAttachments = aiAttachments.filter(item => item.id !== btn.dataset.id);
+            renderAiAttachments();
+        });
+    });
+}
+
+function buildAttachmentContext(attachments) {
+    if (!attachments.length) return '';
+
+    const textBlocks = attachments
+        .filter(item => item.text)
+        .map(item => `【上傳文字資料：${item.name}】\n${item.text}${item.truncated ? '\n（此檔案內容較長，已截取前段供分析。）' : ''}`)
+        .join('\n\n');
+
+    const binaryList = attachments
+        .filter(item => !item.text)
+        .map(item => `- ${item.name}（${item.type || '未知格式'}，${formatFileSize(item.size)}）`)
+        .join('\n');
+
+    const binaryNote = binaryList
+        ? `【上傳附件】\n${binaryList}\n若已設定 Gemini API 金鑰，系統會把這些附件一併送交模型判讀；若未設定金鑰，請改上傳文字檔或貼上內容。`
+        : '';
+
+    return [textBlocks, binaryNote].filter(Boolean).join('\n\n');
+}
+
+function buildGeminiParts(prompt, attachments) {
+    const parts = [{ text: prompt }];
+    attachments.forEach(item => {
+        if (!item.text && item.base64) {
+            parts.push({
+                inlineData: {
+                    mimeType: item.type || 'application/octet-stream',
+                    data: item.base64
+                }
+            });
+        }
+    });
+    return parts;
 }
 
 // === 初始化語音辨識機制 ===
@@ -1282,18 +1458,33 @@ async function handleAiChatSend() {
     if (!chatInput || !messagesContainer) return;
 
     const question = chatInput.value.trim();
-    if (!question) return;
+    const turnAttachments = aiAttachments.slice();
+    if (!question && !turnAttachments.length) return;
+
+    const attachmentContext = buildAttachmentContext(turnAttachments);
+    const effectiveQuestion = [
+        question || '請分析我上傳的資料，指出與政府採購法相關的爭點、風險與可採取的救濟行動。',
+        attachmentContext
+    ].filter(Boolean).join('\n\n');
+    const displayQuestion = [
+        question || '請分析我上傳的資料。',
+        turnAttachments.length ? `附件：${turnAttachments.map(item => item.name).join('、')}` : ''
+    ].filter(Boolean).join('\n');
 
     // 停用輸入框與發送鍵防止重複提交
     chatInput.disabled = true;
     const sendBtn = document.getElementById('ai-chat-send-btn');
     if (sendBtn) sendBtn.disabled = true;
+    const fileUploadBtn = document.getElementById('ai-file-upload-btn');
+    if (fileUploadBtn) fileUploadBtn.disabled = true;
 
     // 1. 插入使用者訊息氣泡
-    appendUserBubble(question);
+    appendUserBubble(displayQuestion);
 
-    // 清空輸入框
+    // 清空輸入框與附件
     chatInput.value = '';
+    aiAttachments = [];
+    renderAiAttachments();
 
     // 2. 插入 AI 的讀取中(Loading)泡泡
     const loadingBubble = document.createElement('div');
@@ -1307,7 +1498,7 @@ async function handleAiChatSend() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
     // 3. 執行本機 RAG 檢索與文獻合併
-    const retrieved = localRAGRetrieve(question);
+    const retrieved = localRAGRetrieve(effectiveQuestion);
     const isFollowUp = (aiChatHistory.length > 0);
 
     const turnRefs = retrieved.rulings.concat(retrieved.judgments);
@@ -1320,7 +1511,8 @@ async function handleAiChatSend() {
     // 4. 若無當前 Session，則建立新對話
     if (!activeSessionId) {
         activeSessionId = Date.now().toString();
-        const title = question.slice(0, 12) + (question.length > 12 ? '...' : '');
+        const titleSource = question || (turnAttachments[0]?.name ? `附件：${turnAttachments[0].name}` : '上傳資料分析');
+        const title = titleSource.slice(0, 12) + (titleSource.length > 12 ? '...' : '');
         aiSessions.unshift({
             id: activeSessionId,
             title: title,
@@ -1336,10 +1528,10 @@ async function handleAiChatSend() {
             if (messagesContainer.contains(loadingBubble)) {
                 messagesContainer.removeChild(loadingBubble);
             }
-            const result = localSemanticParse(question);
+            const result = localSemanticParse(effectiveQuestion);
             appendAiBubble(result.conversational_answer, result, turnRefs);
             
-            aiChatHistory.push({ role: 'user', parts: [{ text: question }] });
+            aiChatHistory.push({ role: 'user', parts: [{ text: effectiveQuestion }] });
             aiChatHistory.push({ role: 'model', parts: [{ text: JSON.stringify(result) }] });
             
             saveCurrentSession();
@@ -1347,6 +1539,7 @@ async function handleAiChatSend() {
             
             chatInput.disabled = false;
             if (sendBtn) sendBtn.disabled = false;
+            if (fileUploadBtn) fileUploadBtn.disabled = false;
             chatInput.focus();
         }, 800);
         return;
@@ -1354,8 +1547,8 @@ async function handleAiChatSend() {
 
     // 6. 有金鑰，呼叫 Gemini API
     try {
-        const turnPrompt = buildRagPrompt(question, retrieved.rulings, retrieved.judgments, isFollowUp);
-        aiChatHistory.push({ role: 'user', parts: [{ text: turnPrompt }] });
+        const turnPrompt = buildRagPrompt(effectiveQuestion, retrieved.rulings, retrieved.judgments, isFollowUp);
+        aiChatHistory.push({ role: 'user', parts: buildGeminiParts(turnPrompt, turnAttachments) });
 
         const response = await callGeminiAPI(aiChatHistory);
         
@@ -1376,18 +1569,21 @@ async function handleAiChatSend() {
         if (messagesContainer.contains(loadingBubble)) {
             messagesContainer.removeChild(loadingBubble);
         }
-        
-        const errorBubble = document.createElement('div');
-        errorBubble.className = 'chat-bubble ai-bubble';
-        errorBubble.style.borderColor = '#ef4444';
-        errorBubble.innerHTML = `<span style="color: #ef4444; font-weight: bold;">⚠️ 研判失敗：</span>${escapeHtml(err.message)}`;
-        messagesContainer.appendChild(errorBubble);
-        
-        // 移除最後一輪 User 輸入，讓使用者可以再次發送
+
+        const fallbackResult = localSemanticParse(effectiveQuestion);
+        fallbackResult.conversational_answer = `Gemini 連線暫時沒有回應，我先用本機法規資料庫為您做初步研判：\n\n${fallbackResult.conversational_answer}`;
+        fallbackResult.verdict_reason = `Gemini API 未完成回應（${err.message}），已改用本機解析結果。`;
+        appendAiBubble(fallbackResult.conversational_answer, fallbackResult, turnRefs);
+
         aiChatHistory.pop();
+        aiChatHistory.push({ role: 'user', parts: [{ text: effectiveQuestion }] });
+        aiChatHistory.push({ role: 'model', parts: [{ text: JSON.stringify(fallbackResult) }] });
+        saveCurrentSession();
+        renderSidebar();
     } finally {
         chatInput.disabled = false;
         if (sendBtn) sendBtn.disabled = false;
+        if (fileUploadBtn) fileUploadBtn.disabled = false;
         chatInput.focus();
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
@@ -1692,6 +1888,8 @@ function resetAiChat() {
     activeSessionId = null;
     aiChatHistory = [];
     accumulatedReferences = [];
+    aiAttachments = [];
+    renderAiAttachments();
     
     const messagesContainer = document.getElementById('ai-chat-messages');
     if (messagesContainer) {
