@@ -1149,9 +1149,15 @@ function initAiWorkspace() {
         });
     }
 
-    // 新增對話按鈕
+    // 新增對話按鈕 (左側邊欄)
     if (newChatBtn) {
         newChatBtn.addEventListener('click', resetAiChat);
+    }
+
+    // 右上角「新諮詢」按鈕
+    const headerResetBtn = document.getElementById('ai-header-reset-btn');
+    if (headerResetBtn) {
+        headerResetBtn.addEventListener('click', resetAiChat);
     }
 
     // 傳送按鈕
@@ -1912,7 +1918,15 @@ function resetAiChat() {
     aiChatHistory = [];
     accumulatedReferences = [];
     aiAttachments = [];
+    lastRetrievedDocs = null;
+    lastAiPromptText = '';
     renderAiAttachments();
+    
+    // 清空輸入框
+    const chatInput = document.getElementById('ai-chat-input');
+    if (chatInput) {
+        chatInput.value = '';
+    }
     
     const messagesContainer = document.getElementById('ai-chat-messages');
     if (messagesContainer) {
